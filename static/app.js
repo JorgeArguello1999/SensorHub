@@ -55,20 +55,56 @@ const fetchData = async () => {
   setError(null);
 
   try {
-    // *** PUNTO CLAVE PARA INTEGRACIÓN FLASK ***
-    // Aquí es donde en un entorno real harías:
-    // const response = await fetch(`/api/temperatures?location=${encodeURIComponent(locationState)}`);
-    // const jsonData = await response.json();
-    // setData(jsonData.data);
+    // ----- LECTURA REAL DESDE FIREBASE -----
+    const firebaseConfig = {
+  apiKey: "AIzaSyD9oNpbBfrQ82zOgcLj76hLuczEe_-ShMM",
+  databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/"
+};
 
-    // Simulación con datos falsos:
-    await new Promise((resolve) => setTimeout(resolve, 500)); // Simula latencia de red
-    const mockData = generateMockData();
-    setData(mockData);
-    setLastUpdate(new Date().toLocaleTimeString("es-EC"));
+firebase.initializeApp(firebaseConfig);
+
+const db = firebase.database();
+const tempRef = db.ref("test");
+
+tempRef.on("value", snapshot => {
+  const data = snapshot.val();
+  console.log(data);
+});
+    const response = await fetch(
+      "https://esp32-firebase-69994-default-rtdb.firebaseio.com/"
+    );
+    const rawData = await response.json();
+    console.log("Datos recibidos de Firebase:", rawData);
+
+    // rawData esperado:
+    // {
+    //   cuarto: { humedad: XX, temperatura: XX },
+    //   sala:   { humedad: XX, temperatura: XX },
+    //   exterior: { humedad: XX, temperatura: XX }
+    // }
+
+    const now = new Date();
+    const hora = now.toLocaleTimeString("es-EC", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const formatted = [
+      {
+        hora,
+        Ambiente: rawData.sala?.temperatura || 0,
+        Cuarto: rawData.cuarto?.temperatura || 0,
+        Exterior: rawData.exterior?.temperatura || 0,
+      },
+    ];
+
+    // Mantener solo las últimas 12 lecturas
+    setData([...dataState.slice(-11), ...formatted]);
+
+    setLastUpdate(hora);
   } catch (err) {
-    console.error("Error en fetchData:", err);
-    setError("Error al obtener datos");
+    console.error("Error en fetchData Firebase:", err);
+    setError("Error al obtener datos desde Firebase");
   } finally {
     setLoading(false);
   }

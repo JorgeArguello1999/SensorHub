@@ -6,5 +6,9 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "dotenv>=0.9.9",
+    "firebase-admin>=7.1.0",
     "flask>=3.1.2",
+    "requests>=2.32.5",
+    "sqlalchemy>=2.0.44",
+    "sseclient>=0.0.27",
 ]
