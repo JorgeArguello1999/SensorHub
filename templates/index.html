@@ -61,9 +61,7 @@
         <main class="max-w-7xl mx-auto px-6 py-8">
             <div id="error-message"></div>
 
-            <!-- Tarjetas de temperatura actual -->
             <div id="current-stats-container" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <!-- Temperatura Local (Exterior) -->
                 <div class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-amber-500/10 transition-all group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl group-hover:bg-amber-500/10 transition-all"></div>
                     <div class="relative">
@@ -74,14 +72,13 @@
                                 </div>
                                 <span class="text-sm font-medium text-slate-400">Temperatura Local</span>
                             </div>
-                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">Firebase</span>
+                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">OpenWeather</span>
                         </div>
                         <div id="temp-local" class="text-5xl font-bold text-white mb-2">--°</div>
                         <div id="hum-local" class="text-sm text-slate-400">Humedad: --%</div>
                     </div>
                 </div>
 
-                <!-- Sala -->
                 <div class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-emerald-500/10 transition-all group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all"></div>
                     <div class="relative">
@@ -99,7 +96,6 @@
                     </div>
                 </div>
 
-                <!-- Cuarto -->
                 <div class="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-cyan-900/40 backdrop-blur-xl border border-cyan-500/20 rounded-2xl p-6 shadow-2xl hover:shadow-cyan-500/20 transition-all group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl group-hover:bg-cyan-500/20 transition-all"></div>
                     <div class="relative">
@@ -118,7 +114,6 @@
                 </div>
             </div>
 
-            <!-- Histograma de Comparación en Tiempo Real -->
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
@@ -132,7 +127,6 @@
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Comparación Histórica por Fecha -->
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                         <div class="w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full"></div>
@@ -156,7 +150,6 @@
                     </div>
                 </div>
 
-                <!-- Predicciones (Experimental) -->
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                         <div class="w-1 h-6 bg-gradient-to-b from-red-500 to-orange-500 rounded-full"></div>
@@ -213,10 +206,19 @@
         const dataRef = db.ref('/');
 
         // ----------------------------------------------------------------------
+        // CONFIGURACIÓN OPENWEATHERMAP
+        // ----------------------------------------------------------------------
+        const OPENWEATHER_API_KEY = "157973ff5bf045a8c66f1b4d7eab78aa";
+        const CITY_NAME = "Ambato,EC";
+        const OPENWEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?q=${CITY_NAME}&APPID=${OPENWEATHER_API_KEY}`;
+
+
+        // ----------------------------------------------------------------------
         // VARIABLES GLOBALES
         // ----------------------------------------------------------------------
         let realtimeData = {
-            local: { temperatura: 0, humedad: 0 },
+            // Inicializamos con null para saber que los datos OpenWeather aún no han llegado
+            local: { temperatura: null, humedad: null }, 
             sala: { temperatura: 0, humedad: 0 },
             cuarto: { temperatura: 0, humedad: 0 }
         };
@@ -256,10 +258,12 @@
         const generateHistoricalData = () => {
             const data = [];
             const now = new Date();
+            // Usamos los datos actuales como base para simular las últimas 12 horas
             for (let i = 11; i >= 0; i--) {
                 const time = new Date(now.getTime() - i * 3600000);
                 data.push({
                     hora: time.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+                    // Los datos simulados se basan en los valores en tiempo real (Firebase y OpenWeather)
                     Local: realtimeData.local.temperatura + (Math.random() * 2 - 1),
                     Sala: realtimeData.sala.temperatura + (Math.random() * 2 - 1),
                     Cuarto: realtimeData.cuarto.temperatura + (Math.random() * 2 - 1)
@@ -269,6 +273,7 @@
         };
 
         const generateMockHistoryForDate = () => {
+            // Datos simulados para la comparación histórica
             const data = [];
             for (let h = 0; h < 24; h++) {
                 data.push({
@@ -280,14 +285,56 @@
             }
             return data;
         };
+        
+        // ----------------------------------------------------------------------
+        // FUNCIONES DE API
+        // ----------------------------------------------------------------------
+
+        /**
+         * Obtiene la temperatura y humedad exterior de Ambato usando OpenWeatherMap.
+         * @returns {Promise<{temperatura: number, humedad: number} | null>}
+         */
+        const fetchOpenWeatherMapData = async () => {
+            try {
+                const response = await fetch(OPENWEATHER_URL);
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // OpenWeatherMap devuelve la temperatura en Kelvin. La convertimos a Celsius.
+                // Fórmula: Celsius = Kelvin - 273.15
+                const tempKelvin = data.main.temp;
+                const tempCelsius = tempKelvin - 273.15;
+                const humidity = data.main.humidity;
+
+                // Devuelve los datos limpios
+                return {
+                    temperatura: tempCelsius,
+                    humedad: humidity
+                };
+
+            } catch (error) {
+                // En caso de error (API Key incorrecta, ciudad no encontrada, etc.)
+                setError(`Error al obtener datos de OpenWeatherMap: ${error.message}`);
+                console.error("OpenWeatherMap Fetch Error:", error);
+                return null;
+            }
+        };
+
 
         // ----------------------------------------------------------------------
         // RENDERIZADO DE UI
         // ----------------------------------------------------------------------
         const renderCurrentStats = () => {
-            tempLocal.textContent = `${realtimeData.local.temperatura.toFixed(1)}°`;
-            humLocal.textContent = `Humedad: ${realtimeData.local.humedad.toFixed(1)}%`;
+            // Actualizar la tarjeta Local (OpenWeatherMap)
+            const localTemp = realtimeData.local.temperatura;
+            const localHum = realtimeData.local.humedad;
+
+            tempLocal.textContent = localTemp !== null ? `${localTemp.toFixed(1)}°` : '--°';
+            humLocal.textContent = localHum !== null ? `Humedad: ${localHum.toFixed(1)}%` : 'Humedad: --%';
             
+            // Actualizar las tarjetas de Firebase
             tempSala.textContent = `${realtimeData.sala.temperatura.toFixed(1)}°`;
             humSala.textContent = `Humedad: ${realtimeData.sala.humedad.toFixed(1)}%`;
             
@@ -307,21 +354,21 @@
                     labels: data.map(d => d.hora),
                     datasets: [
                         {
-                            label: 'Local',
+                            label: 'Local (Exterior)',
                             data: data.map(d => d.Local),
                             backgroundColor: 'rgba(251, 191, 36, 0.7)',
                             borderColor: '#fbbf24',
                             borderWidth: 1
                         },
                         {
-                            label: 'Sala',
+                            label: 'Sala (Firebase)',
                             data: data.map(d => d.Sala),
                             backgroundColor: 'rgba(16, 185, 129, 0.7)',
                             borderColor: '#10b981',
                             borderWidth: 1
                         },
                         {
-                            label: 'Cuarto',
+                            label: 'Cuarto (Firebase)',
                             data: data.map(d => d.Cuarto),
                             backgroundColor: 'rgba(6, 182, 212, 0.7)',
                             borderColor: '#06b6d4',
@@ -409,25 +456,27 @@
         };
 
         // ----------------------------------------------------------------------
-        // FIREBASE LISTENER
+        // FIREBASE LISTENER MODIFICADO
         // ----------------------------------------------------------------------
         const setupFirebaseListener = () => {
-            dataRef.on('value', (snapshot) => {
+            dataRef.on('value', async (snapshot) => { // ¡Añadimos 'async' aquí!
                 loadingSpinner.classList.add('hidden');
                 
                 const data = snapshot.val();
 
                 if (!data) {
                     setError('No hay datos disponibles en Firebase.');
+                    // Intentamos obtener OpenWeatherMap incluso si Firebase falla, pero no podemos actualizar los gráficos
+                    const openWeatherData = await fetchOpenWeatherMapData();
+                    if (openWeatherData) {
+                        realtimeData.local.temperatura = openWeatherData.temperatura;
+                        realtimeData.local.humedad = openWeatherData.humedad;
+                        renderCurrentStats();
+                    }
                     return;
                 }
 
-                // Mapear datos - ajusta según tu estructura real
-                // Asumiendo que tienes: local, sala, cuarto en Firebase
-                realtimeData.local = {
-                    temperatura: parseFloat(data.local?.temperatura || 0),
-                    humedad: parseFloat(data.local?.humedad || 0)
-                };
+                // --- 1. Obtener Datos Locales de Firebase (Sala y Cuarto) ---
                 realtimeData.sala = {
                     temperatura: parseFloat(data.sala?.temperatura || 0),
                     humedad: parseFloat(data.sala?.humedad || 0)
@@ -436,15 +485,27 @@
                     temperatura: parseFloat(data.cuarto?.temperatura || 0),
                     humedad: parseFloat(data.cuarto?.humedad || 0)
                 };
+                
+                // --- 2. Obtener Datos Exteriores de OpenWeatherMap (Local) ---
+                const openWeatherData = await fetchOpenWeatherMapData();
 
-                // Generar datos históricos simulados
-                historicalData = generateHistoricalData();
+                if (openWeatherData) {
+                    realtimeData.local.temperatura = openWeatherData.temperatura;
+                    realtimeData.local.humedad = openWeatherData.humedad;
+                    setError(null); // Limpiar errores si OpenWeather fue exitoso
+                } else {
+                    // Si falla OpenWeather, usamos los valores por defecto o del último fetch
+                    realtimeData.local.temperatura = realtimeData.local.temperatura ?? 0;
+                    realtimeData.local.humedad = realtimeData.local.humedad ?? 0;
+                }
 
-                // Actualizar UI
+                // --- 3. Actualizar UI ---
+                // Generar datos históricos simulados (Ahora usa los nuevos valores de realtimeData)
+                historicalData = generateHistoricalData(); 
+
                 renderCurrentStats();
                 renderComparisonChart(historicalData);
                 lastUpdateSpan.textContent = new Date().toLocaleTimeString('es-EC');
-                setError(null);
 
             }, (error) => {
                 loadingSpinner.classList.add('hidden');
@@ -458,11 +519,15 @@
         // ----------------------------------------------------------------------
         const generatePrediction = () => {
             // Predicción simple: promedio + pequeña variación aleatoria
-            const predLocal = realtimeData.local.temperatura + (Math.random() * 2 - 1);
+            // Usamos 0 si el valor de OpenWeather es null (aún no ha cargado)
+            const baseLocalTemp = realtimeData.local.temperatura ?? 0;
+            const baseLocalHum = realtimeData.local.humedad ?? 0;
+            
+            const predLocal = baseLocalTemp + (Math.random() * 2 - 1);
             const predSala = realtimeData.sala.temperatura + (Math.random() * 2 - 1);
             const predCuarto = realtimeData.cuarto.temperatura + (Math.random() * 2 - 1);
             
-            const predLocalHum = realtimeData.local.humedad + (Math.random() * 5 - 2.5);
+            const predLocalHum = baseLocalHum + (Math.random() * 5 - 2.5);
             const predSalaHum = realtimeData.sala.humedad + (Math.random() * 5 - 2.5);
             const predCuartoHum = realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5);
 
