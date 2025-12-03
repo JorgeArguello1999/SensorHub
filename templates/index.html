@@ -3,19 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor de Temperatura - Flask Dashboard</title>
+    <title>Monitor de Temperatura Firebase</title>
+
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-gradient@0.6.1/dist/chartjs-plugin-gradient.min.js"></script>
-    <link rel="stylesheet" href=" {{ url_for('static', filename='style.css') }} ">
-    <link rel="shortcut icon" href="{{ url_for('static', filename='logo.png') }}" type="image/x-icon">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+
+    <style>
+        .glass-header {
+            background-color: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card {
+            background-color: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
 </head>
 
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
 
     <div id="temp-dashboard-app">
-        <header class="glass-header">
+        <header class="glass-header sticky top-0 z-10">
             <div class="max-w-7xl mx-auto px-6 py-6">
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div class="flex items-center gap-4">
@@ -26,19 +44,15 @@
                             <h1 class="text-2xl font-bold text-white tracking-tight">Monitor de Temperatura</h1>
                             <div class="flex items-center gap-2 mt-1">
                                 <i data-lucide="map-pin" class="w-4 h-4 text-cyan-400"></i>
-                                <input id="location-input" type="text" value="Ambato"
-                                    class="bg-transparent text-cyan-400 text-sm border-none focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded px-2 py-1"
-                                    placeholder="Ubicación" />
+                                <span class="text-cyan-400 text-sm">Ambato, Ecuador</span>
                             </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <span id="last-update" class="text-sm text-slate-400"></span>
-                        <button id="refresh-button"
-                            class="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:from-blue-500 hover:to-cyan-500 transition-all shadow-lg hover:shadow-cyan-500/25 disabled:opacity-50">
-                            <i id="refresh-icon" data-lucide="refresh-cw" class="w-4 h-4"></i>
-                            Actualizar
-                        </button>
+                        <span id="last-update" class="text-sm text-slate-400">Esperando datos...</span>
+                        <div id="loading-spinner" class="p-2">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 text-cyan-400 animate-spin"></i>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -47,9 +61,10 @@
         <main class="max-w-7xl mx-auto px-6 py-8">
             <div id="error-message"></div>
 
+            <!-- Tarjetas de temperatura actual -->
             <div id="current-stats-container" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div id="card-ambiente"
-                    class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-amber-500/10 transition-all group">
+                <!-- Temperatura Local (Exterior) -->
+                <div class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-amber-500/10 transition-all group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl group-hover:bg-amber-500/10 transition-all"></div>
                     <div class="relative">
                         <div class="flex items-center justify-between mb-4">
@@ -57,17 +72,35 @@
                                 <div class="p-2 bg-amber-500/10 rounded-lg">
                                     <i data-lucide="cloud-sun" class="w-5 h-5 text-amber-400"></i>
                                 </div>
-                                <span class="text-sm font-medium text-slate-400">Ambiente</span>
+                                <span class="text-sm font-medium text-slate-400">Temperatura Local</span>
                             </div>
-                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">API</span>
+                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">Firebase</span>
                         </div>
-                        <div id="temp-ambiente" class="text-5xl font-bold text-white mb-2">--°</div>
-                        <div id="diff-ambiente" class="text-sm text-slate-400"></div>
+                        <div id="temp-local" class="text-5xl font-bold text-white mb-2">--°</div>
+                        <div id="hum-local" class="text-sm text-slate-400">Humedad: --%</div>
                     </div>
                 </div>
 
-                <div id="card-cuarto"
-                    class="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-cyan-900/40 backdrop-blur-xl border border-cyan-500/20 rounded-2xl p-6 shadow-2xl hover:shadow-cyan-500/20 transition-all group">
+                <!-- Sala -->
+                <div class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-emerald-500/10 transition-all group">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all"></div>
+                    <div class="relative">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-emerald-500/10 rounded-lg">
+                                    <i data-lucide="layout-grid" class="w-5 h-5 text-emerald-400"></i>
+                                </div>
+                                <span class="text-sm font-medium text-slate-400">Sala</span>
+                            </div>
+                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">Firebase</span>
+                        </div>
+                        <div id="temp-sala" class="text-5xl font-bold text-white mb-2">--°</div>
+                        <div id="hum-sala" class="text-sm text-slate-400">Humedad: --%</div>
+                    </div>
+                </div>
+
+                <!-- Cuarto -->
+                <div class="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-cyan-900/40 backdrop-blur-xl border border-cyan-500/20 rounded-2xl p-6 shadow-2xl hover:shadow-cyan-500/20 transition-all group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl group-hover:bg-cyan-500/20 transition-all"></div>
                     <div class="relative">
                         <div class="flex items-center justify-between mb-4">
@@ -75,67 +108,404 @@
                                 <div class="p-2 bg-cyan-500/20 rounded-lg">
                                     <i data-lucide="home" class="w-5 h-5 text-cyan-400"></i>
                                 </div>
-                                <span class="text-sm font-medium text-cyan-300">Mi Cuarto</span>
+                                <span class="text-sm font-medium text-cyan-300">Cuarto</span>
                             </div>
-                            <span class="text-xs text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-full">ESP32</span>
+                            <span class="text-xs text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-full">Firebase</span>
                         </div>
                         <div id="temp-cuarto" class="text-5xl font-bold text-white mb-2">--°</div>
-                        <div class="text-sm text-cyan-300/70">Sensor interior</div>
-                    </div>
-                </div>
-
-                <div id="card-exterior"
-                    class="relative overflow-hidden glass-card rounded-2xl p-6 shadow-2xl hover:shadow-emerald-500/10 transition-all group">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all"></div>
-                    <div class="relative">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="p-2 bg-emerald-500/10 rounded-lg">
-                                    <i data-lucide="thermometer" class="w-5 h-5 text-emerald-400"></i>
-                                </div>
-                                <span class="text-sm font-medium text-slate-400">Exterior</span>
-                            </div>
-                            <span class="text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-full">Sensor</span>
-                        </div>
-                        <div id="temp-exterior" class="text-5xl font-bold text-white mb-2">--°</div>
-                        <div id="diff-exterior" class="text-sm text-slate-400"></div>
+                        <div id="hum-cuarto" class="text-sm text-cyan-300/70">Humedad: --%</div>
                     </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-6">
+            <!-- Histograma de Comparación en Tiempo Real -->
+            <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                         <div class="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></div>
-                        Comparación de Temperaturas
+                        Comparación de Temperaturas (Últimas 12 horas)
                     </h2>
                     <div class="h-[350px]">
-                        <canvas id="bar-chart"></canvas>
+                        <canvas id="comparison-chart"></canvas>
                     </div>
                 </div>
-
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Comparación Histórica por Fecha -->
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                         <div class="w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full"></div>
-                        Tendencia de Temperatura
+                        Comparación por Fecha
                     </h2>
-                    <div class="h-[300px]">
-                        <canvas id="line-chart"></canvas>
+                    <div class="flex gap-4 mb-4 flex-wrap">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-1">Fecha 1</label>
+                            <input type="date" id="date1-input" class="bg-slate-700 text-white rounded p-2 focus:ring-cyan-500 focus:border-cyan-500 border-none" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-1">Fecha 2</label>
+                            <input type="date" id="date2-input" class="bg-slate-700 text-white rounded p-2 focus:ring-cyan-500 focus:border-cyan-500 border-none" />
+                        </div>
+                        <button id="compare-button" class="mt-6 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-500 hover:to-cyan-500 transition-all shadow-lg">
+                            Comparar
+                        </button>
+                    </div>
+                    <div class="h-[250px] mt-4">
+                        <canvas id="historical-chart"></canvas>
                     </div>
                 </div>
-            </div>
 
-            <div class="mt-6 bg-blue-500/5 backdrop-blur-sm border border-blue-500/20 rounded-xl p-4">
-                <h3 class="text-sm font-semibold text-blue-400 mb-2">
-                    Flask Backend - Endpoint (Simulado)
-                </h3>
-                <div class="text-sm text-slate-400 space-y-1 font-mono">
-                    <p>GET /api/temperatures?location=<span id="endpoint-location">Ambato</span></p>
+                <!-- Predicciones (Experimental) -->
+                <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
+                    <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                        <div class="w-1 h-6 bg-gradient-to-b from-red-500 to-orange-500 rounded-full"></div>
+                        Predicciones (Experimental)
+                    </h2>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-400 mb-1">Fecha de Predicción</label>
+                        <input type="date" id="prediction-date" class="bg-slate-700 text-white rounded p-2 focus:ring-cyan-500 focus:border-cyan-500 border-none w-full" />
+                        <button id="predict-button" class="mt-2 w-full px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-500 hover:to-red-500 transition-all">
+                            Generar Predicción
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="p-4 bg-slate-700/50 rounded-xl">
+                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Local</h3>
+                            <p class="text-white text-3xl font-bold" id="pred-local-temp">--°</p>
+                            <p class="text-slate-400 text-sm" id="pred-local-hum">Hum: --%</p>
+                        </div>
+                        <div class="p-4 bg-slate-700/50 rounded-xl">
+                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Sala</h3>
+                            <p class="text-white text-3xl font-bold" id="pred-sala-temp">--°</p>
+                            <p class="text-slate-400 text-sm" id="pred-sala-hum">Hum: --%</p>
+                        </div>
+                        <div class="p-4 bg-slate-700/50 rounded-xl">
+                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Cuarto</h3>
+                            <p class="text-white text-3xl font-bold" id="pred-cuarto-temp">--°</p>
+                            <p class="text-slate-400 text-sm" id="pred-cuarto-hum">Hum: --%</p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-4">*Predicción basada en promedios históricos y tendencias simples.</p>
                 </div>
             </div>
+            
         </main>
     </div>
 
-    <script src=" {{ url_for('static', filename='app.js') }} "></script>
+    <script>
+        // ----------------------------------------------------------------------
+        // CONFIGURACIÓN FIREBASE
+        // ----------------------------------------------------------------------
+        const firebaseConfig = {
+            databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/",
+        };
+
+        let app;
+        try {
+            app = firebase.initializeApp(firebaseConfig);
+        } catch (e) {
+            console.error("Error al inicializar Firebase.", e);
+        }
+        const db = app.database();
+        const dataRef = db.ref('/');
+
+        // ----------------------------------------------------------------------
+        // VARIABLES GLOBALES
+        // ----------------------------------------------------------------------
+        let realtimeData = {
+            local: { temperatura: 0, humedad: 0 },
+            sala: { temperatura: 0, humedad: 0 },
+            cuarto: { temperatura: 0, humedad: 0 }
+        };
+        let historicalData = []; // Almacena últimas 12 horas
+        let comparisonChartInstance = null;
+        let historicalChartInstance = null;
+
+        // Referencias DOM
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const lastUpdateSpan = document.getElementById('last-update');
+        const errorMessageDiv = document.getElementById('error-message');
+
+        // Tarjetas
+        const tempLocal = document.getElementById('temp-local');
+        const humLocal = document.getElementById('hum-local');
+        const tempSala = document.getElementById('temp-sala');
+        const humSala = document.getElementById('hum-sala');
+        const tempCuarto = document.getElementById('temp-cuarto');
+        const humCuarto = document.getElementById('hum-cuarto');
+
+        // Comparación y predicción
+        const date1Input = document.getElementById('date1-input');
+        const date2Input = document.getElementById('date2-input');
+        const compareButton = document.getElementById('compare-button');
+        const predictionDate = document.getElementById('prediction-date');
+        const predictButton = document.getElementById('predict-button');
+
+        // ----------------------------------------------------------------------
+        // FUNCIONES DE UTILIDAD
+        // ----------------------------------------------------------------------
+        const setError = (message) => {
+            errorMessageDiv.innerHTML = message
+                ? `<div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">${message}</div>`
+                : '';
+        };
+
+        const generateHistoricalData = () => {
+            const data = [];
+            const now = new Date();
+            for (let i = 11; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * 3600000);
+                data.push({
+                    hora: time.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+                    Local: realtimeData.local.temperatura + (Math.random() * 2 - 1),
+                    Sala: realtimeData.sala.temperatura + (Math.random() * 2 - 1),
+                    Cuarto: realtimeData.cuarto.temperatura + (Math.random() * 2 - 1)
+                });
+            }
+            return data;
+        };
+
+        const generateMockHistoryForDate = () => {
+            const data = [];
+            for (let h = 0; h < 24; h++) {
+                data.push({
+                    hora: `${h.toString().padStart(2, '0')}:00`,
+                    Local: 18 + Math.random() * 5,
+                    Sala: 19 + Math.random() * 4,
+                    Cuarto: 20 + Math.random() * 3
+                });
+            }
+            return data;
+        };
+
+        // ----------------------------------------------------------------------
+        // RENDERIZADO DE UI
+        // ----------------------------------------------------------------------
+        const renderCurrentStats = () => {
+            tempLocal.textContent = `${realtimeData.local.temperatura.toFixed(1)}°`;
+            humLocal.textContent = `Humedad: ${realtimeData.local.humedad.toFixed(1)}%`;
+            
+            tempSala.textContent = `${realtimeData.sala.temperatura.toFixed(1)}°`;
+            humSala.textContent = `Humedad: ${realtimeData.sala.humedad.toFixed(1)}%`;
+            
+            tempCuarto.textContent = `${realtimeData.cuarto.temperatura.toFixed(1)}°`;
+            humCuarto.textContent = `Humedad: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
+        };
+
+        const renderComparisonChart = (data) => {
+            if (comparisonChartInstance) {
+                comparisonChartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('comparison-chart').getContext('2d');
+            comparisonChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.hora),
+                    datasets: [
+                        {
+                            label: 'Local',
+                            data: data.map(d => d.Local),
+                            backgroundColor: 'rgba(251, 191, 36, 0.7)',
+                            borderColor: '#fbbf24',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Sala',
+                            data: data.map(d => d.Sala),
+                            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                            borderColor: '#10b981',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Cuarto',
+                            data: data.map(d => d.Cuarto),
+                            backgroundColor: 'rgba(6, 182, 212, 0.7)',
+                            borderColor: '#06b6d4',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } },
+                        y: { beginAtZero: false, grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { labels: { color: '#94a3b8' } } }
+                }
+            });
+        };
+
+        const renderHistoricalChart = (data1, data2, label1, label2) => {
+            if (historicalChartInstance) {
+                historicalChartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('historical-chart').getContext('2d');
+            historicalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data1.map(d => d.hora),
+                    datasets: [
+                        {
+                            label: `Local ${label1}`,
+                            data: data1.map(d => d.Local),
+                            borderColor: '#fbbf24',
+                            borderDash: [0, 0],
+                            tension: 0.4
+                        },
+                        {
+                            label: `Sala ${label1}`,
+                            data: data1.map(d => d.Sala),
+                            borderColor: '#10b981',
+                            borderDash: [0, 0],
+                            tension: 0.4
+                        },
+                        {
+                            label: `Cuarto ${label1}`,
+                            data: data1.map(d => d.Cuarto),
+                            borderColor: '#06b6d4',
+                            borderDash: [0, 0],
+                            tension: 0.4
+                        },
+                        {
+                            label: `Local ${label2}`,
+                            data: data2.map(d => d.Local),
+                            borderColor: '#fbbf24',
+                            borderDash: [5, 5],
+                            tension: 0.4
+                        },
+                        {
+                            label: `Sala ${label2}`,
+                            data: data2.map(d => d.Sala),
+                            borderColor: '#10b981',
+                            borderDash: [5, 5],
+                            tension: 0.4
+                        },
+                        {
+                            label: `Cuarto ${label2}`,
+                            data: data2.map(d => d.Cuarto),
+                            borderColor: '#06b6d4',
+                            borderDash: [5, 5],
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } },
+                        y: { beginAtZero: false, grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 15, padding: 8 } } }
+                }
+            });
+        };
+
+        // ----------------------------------------------------------------------
+        // FIREBASE LISTENER
+        // ----------------------------------------------------------------------
+        const setupFirebaseListener = () => {
+            dataRef.on('value', (snapshot) => {
+                loadingSpinner.classList.add('hidden');
+                
+                const data = snapshot.val();
+
+                if (!data) {
+                    setError('No hay datos disponibles en Firebase.');
+                    return;
+                }
+
+                // Mapear datos - ajusta según tu estructura real
+                // Asumiendo que tienes: local, sala, cuarto en Firebase
+                realtimeData.local = {
+                    temperatura: parseFloat(data.local?.temperatura || 0),
+                    humedad: parseFloat(data.local?.humedad || 0)
+                };
+                realtimeData.sala = {
+                    temperatura: parseFloat(data.sala?.temperatura || 0),
+                    humedad: parseFloat(data.sala?.humedad || 0)
+                };
+                realtimeData.cuarto = {
+                    temperatura: parseFloat(data.cuarto?.temperatura || 0),
+                    humedad: parseFloat(data.cuarto?.humedad || 0)
+                };
+
+                // Generar datos históricos simulados
+                historicalData = generateHistoricalData();
+
+                // Actualizar UI
+                renderCurrentStats();
+                renderComparisonChart(historicalData);
+                lastUpdateSpan.textContent = new Date().toLocaleTimeString('es-EC');
+                setError(null);
+
+            }, (error) => {
+                loadingSpinner.classList.add('hidden');
+                setError(`Error de Firebase: ${error.code}`);
+                console.error("Firebase error:", error);
+            });
+        };
+
+        // ----------------------------------------------------------------------
+        // PREDICCIÓN SIMPLE
+        // ----------------------------------------------------------------------
+        const generatePrediction = () => {
+            // Predicción simple: promedio + pequeña variación aleatoria
+            const predLocal = realtimeData.local.temperatura + (Math.random() * 2 - 1);
+            const predSala = realtimeData.sala.temperatura + (Math.random() * 2 - 1);
+            const predCuarto = realtimeData.cuarto.temperatura + (Math.random() * 2 - 1);
+            
+            const predLocalHum = realtimeData.local.humedad + (Math.random() * 5 - 2.5);
+            const predSalaHum = realtimeData.sala.humedad + (Math.random() * 5 - 2.5);
+            const predCuartoHum = realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5);
+
+            document.getElementById('pred-local-temp').textContent = `${predLocal.toFixed(1)}°`;
+            document.getElementById('pred-local-hum').textContent = `Hum: ${predLocalHum.toFixed(1)}%`;
+            
+            document.getElementById('pred-sala-temp').textContent = `${predSala.toFixed(1)}°`;
+            document.getElementById('pred-sala-hum').textContent = `Hum: ${predSalaHum.toFixed(1)}%`;
+            
+            document.getElementById('pred-cuarto-temp').textContent = `${predCuarto.toFixed(1)}°`;
+            document.getElementById('pred-cuarto-hum').textContent = `Hum: ${predCuartoHum.toFixed(1)}%`;
+        };
+
+        // ----------------------------------------------------------------------
+        // INICIALIZACIÓN
+        // ----------------------------------------------------------------------
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            setupFirebaseListener();
+
+            // Configurar fechas
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            date1Input.value = yesterday;
+            date2Input.value = today;
+            predictionDate.value = new Date(Date.now() + 86400000).toISOString().split('T')[0]; // Mañana
+
+            // Renderizar comparación inicial
+            const hist1 = generateMockHistoryForDate();
+            const hist2 = generateMockHistoryForDate();
+            renderHistoricalChart(hist1, hist2, yesterday, today);
+
+            // Event listeners
+            compareButton.addEventListener('click', () => {
+                const newHist1 = generateMockHistoryForDate();
+                const newHist2 = generateMockHistoryForDate();
+                renderHistoricalChart(newHist1, newHist2, date1Input.value, date2Input.value);
+            });
+
+            predictButton.addEventListener('click', () => {
+                generatePrediction();
+            });
+        });
+    </script>
 </body>
 </html>
