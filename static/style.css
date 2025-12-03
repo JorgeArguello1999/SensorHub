@@ -1,0 +1,20 @@
+/* Estilos personalizados para el efecto 'glass' */
+.glass-header {
+  background-color: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card {
+  background-color: rgba(15, 23, 42, 0.9);
+  /* slate-900/90 */
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Ocultar el spinner de input type text */
+input[type="text"] {
+  appearance: none;
+  -moz-appearance: none;
+  -webkit-appearance: none;
+}
