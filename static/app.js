@@ -1,343 +1,195 @@
 // ----------------------------------------------------------------------
-// LÓGICA DE JAVASCRIPT PLANO
+// CONFIGURACIÓN FIREBASE
 // ----------------------------------------------------------------------
+const firebaseConfig = {
+  databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/",
+};
 
-// Variables de estado
-let locationState = "Ambato";
-let dataState = [];
-let loadingState = false;
-let lastUpdateState = null;
-let errorState = null;
-let intervalId = null;
+let app;
+try {
+  app = firebase.initializeApp(firebaseConfig);
+} catch (e) {
+  console.error("Error al inicializar Firebase.", e);
+}
+const db = app.database();
+const dataRef = db.ref("/");
 
-// Referencias del DOM
-const locationInput = document.getElementById("location-input");
-const refreshButton = document.getElementById("refresh-button");
-const refreshIcon = document.getElementById("refresh-icon");
+// ----------------------------------------------------------------------
+// CONFIGURACIÓN OPENWEATHERMAP
+// ----------------------------------------------------------------------
+const OPENWEATHER_API_KEY = "157973ff5bf045a8c66f1b4d7eab78aa";
+const LATITUDE = -1.27442;
+const LONGITUDE = -78.638786;
+const OPENWEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?lat=${LATITUDE}&lon=${LONGITUDE}&APPID=${OPENWEATHER_API_KEY}`;
+
+// ----------------------------------------------------------------------
+// VARIABLES GLOBALES
+// ----------------------------------------------------------------------
+let realtimeData = {
+  local: { temperatura: null, humedad: null },
+  sala: { temperatura: 0, humedad: 0 },
+  cuarto: { temperatura: 0, humedad: 0 },
+};
+let historicalData = [];
+let comparisonChartInstance = null;
+let historicalChartInstance = null;
+let currentChartDataType = "temperatura"; // NUEVA variable para controlar la pestaña activa
+
+// Referencias DOM
+const loadingSpinner = document.getElementById("loading-spinner");
 const lastUpdateSpan = document.getElementById("last-update");
 const errorMessageDiv = document.getElementById("error-message");
-const endpointLocationSpan = document.getElementById("endpoint-location");
-const currentStatsContainer = document.getElementById(
-  "current-stats-container"
-);
+const downloadCsvButton = document.getElementById("download-csv-button");
+const tabButtons = document.querySelectorAll(".tab-button"); // NUEVO: botones de pestaña
 
-// Instancias de Chart.js
-let barChartInstance = null;
-let lineChartInstance = null;
+// Tarjetas y el resto de los elementos DOM... (sin cambios)
+const tempLocal = document.getElementById("temp-local");
+const humLocal = document.getElementById("hum-local");
+const tempSala = document.getElementById("temp-sala");
+const humSala = document.getElementById("hum-sala");
+const tempCuarto = document.getElementById("temp-cuarto");
+const humCuarto = document.getElementById("hum-cuarto");
 
-/**
- * Simula la generación de datos de temperatura (últimas 12 horas).
- */
-const generateMockData = () => {
-  const hours = [];
-  const now = new Date();
-
-  for (let i = 11; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 3600000);
-    hours.push({
-      hora: time.toLocaleTimeString("es-EC", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      Ambiente: parseFloat((18 + Math.random() * 4).toFixed(1)), // API
-      Cuarto: parseFloat((20 + Math.random() * 3).toFixed(1)), // ESP32
-      Exterior: parseFloat((16 + Math.random() * 5).toFixed(1)), // Sensor
-    });
-  }
-  return hours;
-};
-
-/**
- * Simula la llamada a la API para obtener los datos.
- */
-const fetchData = async () => {
-  setLoading(true);
-  setError(null);
-
-  try {
-    // ----- LECTURA REAL DESDE FIREBASE -----
-    const firebaseConfig = {
-  apiKey: "AIzaSyD9oNpbBfrQ82zOgcLj76hLuczEe_-ShMM",
-  databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/"
-};
-
-firebase.initializeApp(firebaseConfig);
-
-const db = firebase.database();
-const tempRef = db.ref("test");
-
-tempRef.on("value", snapshot => {
-  const data = snapshot.val();
-  console.log(data);
-});
-    const response = await fetch(
-      "https://esp32-firebase-69994-default-rtdb.firebaseio.com/"
-    );
-    const rawData = await response.json();
-    console.log("Datos recibidos de Firebase:", rawData);
-
-    // rawData esperado:
-    // {
-    //   cuarto: { humedad: XX, temperatura: XX },
-    //   sala:   { humedad: XX, temperatura: XX },
-    //   exterior: { humedad: XX, temperatura: XX }
-    // }
-
-    const now = new Date();
-    const hora = now.toLocaleTimeString("es-EC", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const formatted = [
-      {
-        hora,
-        Ambiente: rawData.sala?.temperatura || 0,
-        Cuarto: rawData.cuarto?.temperatura || 0,
-        Exterior: rawData.exterior?.temperatura || 0,
-      },
-    ];
-
-    // Mantener solo las últimas 12 lecturas
-    setData([...dataState.slice(-11), ...formatted]);
-
-    setLastUpdate(hora);
-  } catch (err) {
-    console.error("Error en fetchData Firebase:", err);
-    setError("Error al obtener datos desde Firebase");
-  } finally {
-    setLoading(false);
-  }
-};
+const date1Input = document.getElementById("date1-input");
+const date2Input = document.getElementById("date2-input");
+const compareButton = document.getElementById("compare-button");
+const predictionDate = document.getElementById("prediction-date");
+const predictButton = document.getElementById("predict-button");
+const predictionResultsDiv = document.getElementById("prediction-results");
 
 // ----------------------------------------------------------------------
-// Funciones de actualización de estado (similares a setState/useEffect)
+// FUNCIONES DE UTILIDAD
 // ----------------------------------------------------------------------
-
-const setLoading = (isLoading) => {
-  loadingState = isLoading;
-  refreshButton.disabled = isLoading;
-  if (isLoading) {
-    refreshIcon.classList.add("animate-spin");
-  } else {
-    refreshIcon.classList.remove("animate-spin");
-  }
-};
-
 const setError = (message) => {
-  errorState = message;
   errorMessageDiv.innerHTML = message
     ? `<div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">${message}</div>`
     : "";
 };
 
-const setLastUpdate = (time) => {
-  lastUpdateState = time;
-  lastUpdateSpan.textContent = time ? `Última actualización: ${time}` : "";
+const generateHistoricalData = () => {
+  const data = [];
+  const now = new Date();
+  // Simular las últimas 12 horas
+  for (let i = 11; i >= 0; i--) {
+    const time = new Date(now.getTime() - i * 3600000);
+    const localTemp = realtimeData.local.temperatura ?? 15;
+    const localHum = realtimeData.local.humedad ?? 60;
+
+    data.push({
+      hora: time.toLocaleTimeString("es-EC", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+
+      // Almacenamos ambos valores para que el gráfico los use.
+      Local_Temp: localTemp + (Math.random() * 2 - 1),
+      Sala_Temp: realtimeData.sala.temperatura + (Math.random() * 2 - 1),
+      Cuarto_Temp: realtimeData.cuarto.temperatura + (Math.random() * 2 - 1),
+
+      Local_Hum: localHum + (Math.random() * 5 - 2.5),
+      Sala_Hum: realtimeData.sala.humedad + (Math.random() * 5 - 2.5),
+      Cuarto_Hum: realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5),
+    });
+  }
+  return data;
 };
 
-const setLocation = (newLocation) => {
-  locationState = newLocation;
-  locationInput.value = newLocation;
-  endpointLocationSpan.textContent = newLocation;
-  // Cuando la ubicación cambia, se reinicia la carga de datos
-  fetchData();
-  // Reiniciar el intervalo
-  clearInterval(intervalId);
-  intervalId = setInterval(fetchData, 300000); // 5 minutos
+const generateMockHistoryForDate = () => {
+  // Datos simulados para la comparación histórica
+  const data = [];
+  for (let h = 0; h < 24; h++) {
+    data.push({
+      hora: `${h.toString().padStart(2, "0")}:00`,
+      Local: 18 + Math.random() * 5,
+      Sala: 19 + Math.random() * 4,
+      Cuarto: 20 + Math.random() * 3,
+    });
+  }
+  return data;
 };
 
-const setData = (newData) => {
-  dataState = newData;
-  renderCurrentStats(newData);
-  renderBarChart(newData);
-  renderLineChart(newData);
+// Función de API (sin cambios)
+const fetchOpenWeatherMapData = async () => {
+  try {
+    const response = await fetch(OPENWEATHER_URL);
+    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+    const data = await response.json();
+    const tempKelvin = data.main.temp;
+    const tempCelsius = tempKelvin - 273.15;
+    const humidity = data.main.humidity;
+    return { temperatura: tempCelsius, humedad: humidity };
+  } catch (error) {
+    setError(`Error al obtener datos de OpenWeatherMap: ${error.message}`);
+    console.error("OpenWeatherMap Fetch Error:", error);
+    return null;
+  }
 };
 
 // ----------------------------------------------------------------------
-// Funciones de renderizado
+// RENDERIZADO DE UI
 // ----------------------------------------------------------------------
+const renderCurrentStats = () => {
+  // Actualizar la tarjeta Local (OpenWeatherMap)
+  const localTemp = realtimeData.local.temperatura;
+  const localHum = realtimeData.local.humedad;
 
-/**
- * Calcula la diferencia de temperatura para las tarjetas.
- */
-const calculateDiff = (temp1, temp2) => {
-  const diff = temp1 - temp2;
-  return diff > 0 ? `+${diff.toFixed(1)}°` : `${diff.toFixed(1)}°`;
+  tempLocal.textContent =
+    localTemp !== null ? `${localTemp.toFixed(1)}°` : "--°";
+  humLocal.textContent =
+    localHum !== null ? `Humedad: ${localHum.toFixed(1)}%` : "Humedad: --%";
+
+  // Actualizar las tarjetas de Firebase
+  tempSala.textContent = `${realtimeData.sala.temperatura.toFixed(1)}°`;
+  humSala.textContent = `Humedad: ${realtimeData.sala.humedad.toFixed(1)}%`;
+
+  tempCuarto.textContent = `${realtimeData.cuarto.temperatura.toFixed(1)}°`;
+  humCuarto.textContent = `Humedad: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
 };
 
 /**
- * Renderiza las tarjetas de temperatura actual.
+ * Renderiza el gráfico de comparación (Líneas) basado en el tipo de dato.
+ * @param {Array} data - Datos históricos.
+ * @param {string} dataType - 'temperatura' o 'humedad'.
  */
-const renderCurrentStats = (data) => {
-  if (data.length === 0) {
-    currentStatsContainer.classList.add("hidden");
-    return;
+const renderComparisonChart = (data, dataType) => {
+  if (comparisonChartInstance) {
+    comparisonChartInstance.destroy();
   }
-  currentStatsContainer.classList.remove("hidden");
 
-  const currentStats = {
-    ambiente: data[data.length - 1]["Ambiente"],
-    cuarto: data[data.length - 1]["Cuarto"],
-    exterior: data[data.length - 1]["Exterior"],
-  };
+  const isTemperature = dataType === "temperatura";
+  const unit = isTemperature ? "°C" : "%";
+  const dataSuffix = isTemperature ? "_Temp" : "_Hum";
+  const labelTitle = isTemperature ? "Temperatura" : "Humedad";
 
-  // Ambiente
-  document.getElementById(
-    "temp-ambiente"
-  ).textContent = `${currentStats.ambiente.toFixed(1)}°`;
-  document.getElementById("diff-ambiente").textContent = `${calculateDiff(
-    currentStats.ambiente,
-    currentStats.cuarto
-  )} vs cuarto`;
-
-  // Mi Cuarto
-  document.getElementById(
-    "temp-cuarto"
-  ).textContent = `${currentStats.cuarto.toFixed(1)}°`;
-
-  // Exterior
-  document.getElementById(
-    "temp-exterior"
-  ).textContent = `${currentStats.exterior.toFixed(1)}°`;
-  document.getElementById("diff-exterior").textContent = `${calculateDiff(
-    currentStats.exterior,
-    currentStats.cuarto
-  )} vs cuarto`;
-};
-
-/**
- * Renderiza el gráfico de barras con Chart.js.
- */
-const renderBarChart = (data) => {
-  if (barChartInstance) {
-    barChartInstance.destroy();
-  }
-  if (data.length === 0) return;
-
-  const ctx = document.getElementById("bar-chart").getContext("2d");
-  const labels = data.map((d) => d.hora);
-
-  barChartInstance = new Chart(ctx, {
-    type: "bar",
-    plugins: [Chart.plugins.register(Chart.plugins.Gradient)], // Registrar el plugin de gradiente
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "Ambiente",
-          data: data.map((d) => d.Ambiente),
-          backgroundColor: "rgba(251, 191, 36, 0.8)", // Amarillo
-          borderColor: "rgba(251, 191, 36, 1)",
-          borderWidth: 1,
-          borderRadius: 8,
-          gradient: {
-            type: "vertical",
-            colors: ["rgba(251, 191, 36, 0.9)", "rgba(251, 191, 36, 0.6)"],
-          },
-        },
-        {
-          label: "Cuarto",
-          data: data.map((d) => d.Cuarto),
-          backgroundColor: "rgba(6, 182, 212, 0.9)", // Cian
-          borderColor: "rgba(6, 182, 212, 1)",
-          borderWidth: 1,
-          borderRadius: 8,
-          gradient: {
-            type: "vertical",
-            colors: ["rgba(6, 182, 212, 1)", "rgba(6, 182, 212, 0.7)"],
-          },
-        },
-        {
-          label: "Exterior",
-          data: data.map((d) => d.Exterior),
-          backgroundColor: "rgba(16, 185, 129, 0.8)", // Verde
-          borderColor: "rgba(16, 185, 129, 1)",
-          borderWidth: 1,
-          borderRadius: 8,
-          gradient: {
-            type: "vertical",
-            colors: ["rgba(16, 185, 129, 0.9)", "rgba(16, 185, 129, 0.6)"],
-          },
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          grid: { color: "#3341554d", drawBorder: false }, // Gris oscuro con baja opacidad
-          ticks: { color: "#94a3b8" },
-        },
-        y: {
-          beginAtZero: false,
-          grid: { color: "#3341554d" },
-          ticks: { color: "#94a3b8" },
-          title: { display: true, text: "Temperatura (°C)", color: "#94a3b8" },
-        },
-      },
-      plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        tooltip: {
-          backgroundColor: "#1e293b",
-          borderColor: "#334155",
-          borderWidth: 1,
-          titleColor: "#fff",
-          bodyColor: "#fff",
-          cornerRadius: 12,
-        },
-      },
-    },
-  });
-};
-
-/**
- * Renderiza el gráfico de líneas con Chart.js.
- */
-const renderLineChart = (data) => {
-  if (lineChartInstance) {
-    lineChartInstance.destroy();
-  }
-  if (data.length === 0) return;
-
-  const ctx = document.getElementById("line-chart").getContext("2d");
-  const labels = data.map((d) => d.hora);
-
-  lineChartInstance = new Chart(ctx, {
+  const ctx = document.getElementById("comparison-chart").getContext("2d");
+  comparisonChartInstance = new Chart(ctx, {
     type: "line",
     data: {
-      labels: labels,
+      labels: data.map((d) => d.hora),
       datasets: [
         {
-          label: "Ambiente",
-          data: data.map((d) => d.Ambiente),
-          borderColor: "#fbbf24", // Amarillo
-          backgroundColor: "transparent",
+          label: `${labelTitle} Local (Exterior)`,
+          data: data.map((d) => d["Local" + dataSuffix]),
+          borderColor: "#fbbf24",
           tension: 0.4,
-          pointRadius: 4,
-          pointBackgroundColor: "#fbbf24",
-          borderWidth: 2,
+          fill: false,
+          pointRadius: 3,
         },
         {
-          label: "Cuarto",
-          data: data.map((d) => d.Cuarto),
-          borderColor: "#06b6d4", // Cian
-          backgroundColor: "transparent",
+          label: `${labelTitle} Sala (Firebase)`,
+          data: data.map((d) => d["Sala" + dataSuffix]),
+          borderColor: "#10b981",
           tension: 0.4,
-          pointRadius: 5,
-          pointBackgroundColor: "#06b6d4",
-          borderWidth: 3,
+          fill: false,
+          pointRadius: 3,
         },
         {
-          label: "Exterior",
-          data: data.map((d) => d.Exterior),
-          borderColor: "#10b981", // Verde
-          backgroundColor: "transparent",
+          label: `${labelTitle} Cuarto (Firebase)`,
+          data: data.map((d) => d["Cuarto" + dataSuffix]),
+          borderColor: "#06b6d4",
           tension: 0.4,
-          pointRadius: 4,
-          pointBackgroundColor: "#10b981",
-          borderWidth: 2,
+          fill: false,
+          pointRadius: 3,
         },
       ],
     },
@@ -345,10 +197,89 @@ const renderLineChart = (data) => {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        x: {
-          grid: { color: "#3341554d", drawBorder: false },
-          ticks: { color: "#94a3b8" },
+        x: { grid: { color: "#3341554d" }, ticks: { color: "#94a3b8" } },
+        y: {
+          beginAtZero: false,
+          grid: { color: "#3341554d" },
+          ticks: {
+            color: "#94a3b8",
+            callback: function (value) {
+              return value.toFixed(1) + unit; // Añadir unidad a las etiquetas del eje Y
+            },
+          },
         },
+      },
+      plugins: { legend: { labels: { color: "#94a3b8" } } },
+    },
+  });
+};
+
+const renderHistoricalChart = (data1, data2, label1, label2) => {
+  if (historicalChartInstance) {
+    historicalChartInstance.destroy();
+  }
+  // Mantenemos esta función simple ya que solo tiene datos de temperatura simulados por ahora
+  const ctx = document.getElementById("historical-chart").getContext("2d");
+  historicalChartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: data1.map((d) => d.hora),
+      datasets: [
+        {
+          label: `Local ${label1}`,
+          data: data1.map((d) => d.Local),
+          borderColor: "#fbbf24",
+          borderDash: [0, 0],
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: `Sala ${label1}`,
+          data: data1.map((d) => d.Sala),
+          borderColor: "#10b981",
+          borderDash: [0, 0],
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: `Cuarto ${label1}`,
+          data: data1.map((d) => d.Cuarto),
+          borderColor: "#06b6d4",
+          borderDash: [0, 0],
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: `Local ${label2}`,
+          data: data2.map((d) => d.Local),
+          borderColor: "#fbbf24",
+          borderDash: [5, 5],
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: `Sala ${label2}`,
+          data: data2.map((d) => d.Sala),
+          borderColor: "#10b981",
+          borderDash: [5, 5],
+          tension: 0.4,
+          fill: false,
+        },
+        {
+          label: `Cuarto ${label2}`,
+          data: data2.map((d) => d.Cuarto),
+          borderColor: "#06b6d4",
+          borderDash: [5, 5],
+          tension: 0.4,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: "#3341554d" }, ticks: { color: "#94a3b8" } },
         y: {
           beginAtZero: false,
           grid: { color: "#3341554d" },
@@ -356,44 +287,249 @@ const renderLineChart = (data) => {
         },
       },
       plugins: {
-        legend: { labels: { color: "#94a3b8" } },
-        tooltip: {
-          backgroundColor: "#1e293b",
-          borderColor: "#334155",
-          borderWidth: 1,
-          titleColor: "#fff",
-          bodyColor: "#fff",
-          cornerRadius: 12,
-        },
+        legend: { labels: { color: "#94a3b8", boxWidth: 15, padding: 8 } },
       },
     },
   });
 };
 
 // ----------------------------------------------------------------------
-// Inicialización y Event Listeners
+// LÓGICA DE PESTAÑAS (NUEVA)
 // ----------------------------------------------------------------------
+const switchTab = (dataType) => {
+  currentChartDataType = dataType;
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Reemplaza los iconos de Lucide
-  lucide.createIcons();
-
-  // Carga inicial de datos
-  fetchData();
-
-  // Establece el intervalo de actualización (5 minutos)
-  intervalId = setInterval(fetchData, 300000);
-
-  // Event Listener para el botón de actualizar
-  refreshButton.addEventListener("click", fetchData);
-
-  // Event Listener para el input de ubicación
-  locationInput.addEventListener("change", (e) => {
-    setLocation(e.target.value);
-  });
-  locationInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      setLocation(e.target.value);
+  // 1. Manejar estilos de los botones
+  tabButtons.forEach((button) => {
+    if (button.dataset.tab === dataType) {
+      button.classList.add("border-cyan-500", "text-cyan-400");
+      button.classList.remove(
+        "border-transparent",
+        "text-slate-400",
+        "hover:text-slate-300"
+      );
+    } else {
+      button.classList.remove("border-cyan-500", "text-cyan-400");
+      button.classList.add(
+        "border-transparent",
+        "text-slate-400",
+        "hover:text-slate-300"
+      );
     }
   });
+
+  // 2. Renderizar el gráfico con los datos correspondientes
+  if (historicalData.length > 0) {
+    renderComparisonChart(historicalData, dataType);
+  }
+};
+
+// ----------------------------------------------------------------------
+// FUNCIÓN DE DESCARGA CSV (MODIFICADA para incluir Humedad)
+// ----------------------------------------------------------------------
+const downloadCsv = () => {
+  if (historicalData.length === 0) {
+    alert("No hay datos históricos para descargar.");
+    return;
+  }
+
+  // 1. Cabeceras del CSV (Añadidas columnas de Humedad)
+  const header =
+    "Hora,Local Temp (°C),Local Hum (%),Sala Temp (°C),Sala Hum (%),Cuarto Temp (°C),Cuarto Hum (%)\n";
+
+  // 2. Mapeo de datos
+  const csvData = historicalData
+    .map((item) => {
+      return [
+        item.hora,
+        item.Local_Temp.toFixed(2),
+        item.Local_Hum.toFixed(2),
+        item.Sala_Temp.toFixed(2),
+        item.Sala_Hum.toFixed(2),
+        item.Cuarto_Temp.toFixed(2),
+        item.Cuarto_Hum.toFixed(2),
+      ].join(",");
+    })
+    .join("\n");
+
+  const finalCsv = header + csvData;
+
+  // 3. Crear el blob y forzar la descarga
+  const blob = new Blob([finalCsv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.setAttribute("href", url);
+  link.setAttribute(
+    "download",
+    `datos_historicos_temp_hum_${new Date().toISOString().slice(0, 10)}.csv`
+  );
+  link.style.visibility = "hidden";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// ----------------------------------------------------------------------
+// FUNCIÓN DE ACTUALIZACIÓN DE OPENWEATHERMAP
+// ----------------------------------------------------------------------
+const updateOpenWeatherMap = async () => {
+  const openWeatherData = await fetchOpenWeatherMapData();
+
+  if (openWeatherData) {
+    realtimeData.local.temperatura = openWeatherData.temperatura;
+    realtimeData.local.humedad = openWeatherData.humedad;
+
+    // Si el listener de Firebase ya está activo, no necesitamos llamar a renderCurrentStats,
+    // ya que generateHistoricalData se encargará de esto en el próximo tick,
+    // pero lo mantenemos para el caso de una actualización aislada.
+    renderCurrentStats();
+  }
+};
+
+// ----------------------------------------------------------------------
+// FIREBASE LISTENER
+// ----------------------------------------------------------------------
+const setupFirebaseListener = () => {
+  dataRef.on(
+    "value",
+    async (snapshot) => {
+      loadingSpinner.classList.add("hidden");
+
+      const data = snapshot.val();
+
+      if (!data) {
+        setError("No hay datos disponibles en Firebase.");
+        renderCurrentStats();
+        return;
+      }
+
+      // Obtener Datos de Firebase (Sala y Cuarto)
+      realtimeData.sala = {
+        temperatura: parseFloat(data.sala?.temperatura || 0),
+        humedad: parseFloat(data.sala?.humedad || 0),
+      };
+      realtimeData.cuarto = {
+        temperatura: parseFloat(data.cuarto?.temperatura || 0),
+        humedad: parseFloat(data.cuarto?.humedad || 0),
+      };
+
+      // Actualizar UI y Gráficos
+      historicalData = generateHistoricalData();
+
+      renderCurrentStats();
+      // Renderizar el gráfico con la pestaña actualmente seleccionada
+      renderComparisonChart(historicalData, currentChartDataType);
+      lastUpdateSpan.textContent = new Date().toLocaleTimeString("es-EC");
+      setError(null);
+    },
+    (error) => {
+      loadingSpinner.classList.add("hidden");
+      setError(`Error de Firebase: ${error.code}`);
+      console.error("Firebase error:", error);
+    }
+  );
+};
+
+// ----------------------------------------------------------------------
+// PREDICCIÓN CON HORAS (Sin cambios en lógica)
+// ----------------------------------------------------------------------
+const generatePrediction = () => {
+  predictionResultsDiv.innerHTML = "";
+
+  const now = new Date();
+  let htmlContent = "";
+
+  for (let i = 1; i <= 4; i++) {
+    const nextTime = new Date(now.getTime() + i * 3600000);
+    const hourLabel = nextTime.toLocaleTimeString("es-EC", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const predLocal =
+      (realtimeData.local.temperatura ?? 15) + (Math.random() * 2 - 1);
+    const predSala = realtimeData.sala.temperatura + (Math.random() * 2 - 1);
+    const predCuarto =
+      realtimeData.cuarto.temperatura + (Math.random() * 2 - 1);
+
+    const predLocalHum =
+      (realtimeData.local.humedad ?? 60) + (Math.random() * 5 - 2.5);
+    const predSalaHum = realtimeData.sala.humedad + (Math.random() * 5 - 2.5);
+    const predCuartoHum =
+      realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5);
+
+    htmlContent += `
+                    <div class="p-3 bg-slate-700/50 rounded-lg border border-slate-600/50">
+                        <h4 class="text-lg font-bold text-cyan-300 mb-1">${hourLabel}</h4>
+                        <div class="grid grid-cols-3 text-sm text-white font-medium">
+                            <div>Local: <span class="text-red-400">${predLocal.toFixed(
+                              1
+                            )}°</span> / ${predLocalHum.toFixed(1)}%</div>
+                            <div>Sala: <span class="text-green-400">${predSala.toFixed(
+                              1
+                            )}°</span> / ${predSalaHum.toFixed(1)}%</div>
+                            <div>Cuarto: <span class="text-blue-400">${predCuarto.toFixed(
+                              1
+                            )}°</span> / ${predCuartoHum.toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `;
+  }
+
+  predictionResultsDiv.innerHTML = htmlContent;
+};
+
+// ----------------------------------------------------------------------
+// INICIALIZACIÓN
+// ----------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  lucide.createIcons();
+
+  setupFirebaseListener();
+  updateOpenWeatherMap();
+  setInterval(updateOpenWeatherMap, 60000);
+
+  // Configurar fechas iniciales
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  date1Input.value = yesterday;
+  date2Input.value = today;
+  predictionDate.value = today;
+
+  // Renderizar comparación inicial (Mock Data)
+  const hist1 = generateMockHistoryForDate();
+  const hist2 = generateMockHistoryForDate();
+  renderHistoricalChart(hist1, hist2, yesterday, today);
+
+  // --- EVENT LISTENERS ---
+
+  // Pestañas (Tabs)
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const dataType = button.dataset.tab;
+      switchTab(dataType);
+    });
+  });
+  // Asegurar que se renderice la pestaña inicial de 'temperatura'
+  switchTab("temperatura");
+
+  // Comparación por Fecha
+  compareButton.addEventListener("click", () => {
+    const newHist1 = generateMockHistoryForDate();
+    const newHist2 = generateMockHistoryForDate();
+    renderHistoricalChart(
+      newHist1,
+      newHist2,
+      date1Input.value,
+      date2Input.value
+    );
+  });
+
+  // Predicción
+  predictButton.addEventListener("click", generatePrediction);
+
+  // Descarga CSV
+  downloadCsvButton.addEventListener("click", downloadCsv);
 });
