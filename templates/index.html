@@ -116,12 +116,37 @@
 
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-                    <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                        <div class="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></div>
-                        Comparación de Temperaturas (Últimas 12 horas)
-                    </h2>
-                    <div class="h-[350px]">
-                        <canvas id="comparison-chart"></canvas>
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold text-white flex items-center gap-2">
+                            <div class="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></div>
+                            Comparación de Datos (Últimas 12 horas)
+                        </h2>
+                        <button id="download-csv-button" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-cyan-300 rounded-lg text-sm transition-all flex items-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Descargar CSV
+                        </button>
+                    </div>
+
+                    <div class="flex border-b border-slate-700 mb-6">
+                        <button 
+                            id="tab-temperatura"
+                            data-tab="temperatura"
+                            class="tab-button py-2 px-4 text-sm font-medium border-b-2 border-cyan-500 text-cyan-400 transition-colors"
+                        >
+                            Temperatura (°C)
+                        </button>
+                        <button 
+                            id="tab-humedad"
+                            data-tab="humedad"
+                            class="tab-button py-2 px-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-300 transition-colors"
+                        >
+                            Humedad (%)
+                        </button>
+                    </div>
+
+                    <div id="chart-content">
+                        <div class="h-[350px]">
+                            <canvas id="comparison-chart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -153,34 +178,21 @@
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
                         <div class="w-1 h-6 bg-gradient-to-b from-red-500 to-orange-500 rounded-full"></div>
-                        Predicciones (Experimental)
+                        Predicciones (Próximas Horas)
                     </h2>
                     
                     <div class="mb-4">
-                        <label class="block text-sm font-medium text-slate-400 mb-1">Fecha de Predicción</label>
-                        <input type="date" id="prediction-date" class="bg-slate-700 text-white rounded p-2 focus:ring-cyan-500 focus:border-cyan-500 border-none w-full" />
+                        <label class="block text-sm font-medium text-slate-400 mb-1">Fecha Base (Hoy)</label>
+                        <input type="date" id="prediction-date" class="bg-slate-700 text-white rounded p-2 focus:ring-cyan-500 focus:border-cyan-500 border-none w-full" disabled />
                         <button id="predict-button" class="mt-2 w-full px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg hover:from-orange-500 hover:to-red-500 transition-all">
                             Generar Predicción
                         </button>
                     </div>
 
-                    <div class="space-y-4">
-                        <div class="p-4 bg-slate-700/50 rounded-xl">
-                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Local</h3>
-                            <p class="text-white text-3xl font-bold" id="pred-local-temp">--°</p>
-                            <p class="text-slate-400 text-sm" id="pred-local-hum">Hum: --%</p>
-                        </div>
-                        <div class="p-4 bg-slate-700/50 rounded-xl">
-                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Sala</h3>
-                            <p class="text-white text-3xl font-bold" id="pred-sala-temp">--°</p>
-                            <p class="text-slate-400 text-sm" id="pred-sala-hum">Hum: --%</p>
-                        </div>
-                        <div class="p-4 bg-slate-700/50 rounded-xl">
-                            <h3 class="text-sm font-semibold text-slate-400 mb-2">Cuarto</h3>
-                            <p class="text-white text-3xl font-bold" id="pred-cuarto-temp">--°</p>
-                            <p class="text-slate-400 text-sm" id="pred-cuarto-hum">Hum: --%</p>
-                        </div>
+                    <div id="prediction-results" class="space-y-3">
+                        <p class="text-sm text-slate-500 text-center py-4">Presiona "Generar Predicción" para ver el pronóstico.</p>
                     </div>
+                    
                     <p class="text-xs text-slate-500 mt-4">*Predicción basada en promedios históricos y tendencias simples.</p>
                 </div>
             </div>
@@ -209,29 +221,32 @@
         // CONFIGURACIÓN OPENWEATHERMAP
         // ----------------------------------------------------------------------
         const OPENWEATHER_API_KEY = "157973ff5bf045a8c66f1b4d7eab78aa";
-        const CITY_NAME = "Ambato,EC";
-        const OPENWEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?q=${CITY_NAME}&APPID=${OPENWEATHER_API_KEY}`;
+        const LATITUDE = -1.274420; 
+        const LONGITUDE = -78.638786; 
+        const OPENWEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?lat=${LATITUDE}&lon=${LONGITUDE}&APPID=${OPENWEATHER_API_KEY}`;
 
 
         // ----------------------------------------------------------------------
         // VARIABLES GLOBALES
         // ----------------------------------------------------------------------
         let realtimeData = {
-            // Inicializamos con null para saber que los datos OpenWeather aún no han llegado
             local: { temperatura: null, humedad: null }, 
             sala: { temperatura: 0, humedad: 0 },
             cuarto: { temperatura: 0, humedad: 0 }
         };
-        let historicalData = []; // Almacena últimas 12 horas
+        let historicalData = []; 
         let comparisonChartInstance = null;
         let historicalChartInstance = null;
+        let currentChartDataType = 'temperatura'; // NUEVA variable para controlar la pestaña activa
 
         // Referencias DOM
         const loadingSpinner = document.getElementById('loading-spinner');
         const lastUpdateSpan = document.getElementById('last-update');
         const errorMessageDiv = document.getElementById('error-message');
+        const downloadCsvButton = document.getElementById('download-csv-button'); 
+        const tabButtons = document.querySelectorAll('.tab-button'); // NUEVO: botones de pestaña
 
-        // Tarjetas
+        // Tarjetas y el resto de los elementos DOM... (sin cambios)
         const tempLocal = document.getElementById('temp-local');
         const humLocal = document.getElementById('hum-local');
         const tempSala = document.getElementById('temp-sala');
@@ -239,12 +254,12 @@
         const tempCuarto = document.getElementById('temp-cuarto');
         const humCuarto = document.getElementById('hum-cuarto');
 
-        // Comparación y predicción
         const date1Input = document.getElementById('date1-input');
         const date2Input = document.getElementById('date2-input');
         const compareButton = document.getElementById('compare-button');
         const predictionDate = document.getElementById('prediction-date');
         const predictButton = document.getElementById('predict-button');
+        const predictionResultsDiv = document.getElementById('prediction-results'); 
 
         // ----------------------------------------------------------------------
         // FUNCIONES DE UTILIDAD
@@ -258,15 +273,23 @@
         const generateHistoricalData = () => {
             const data = [];
             const now = new Date();
-            // Usamos los datos actuales como base para simular las últimas 12 horas
+            // Simular las últimas 12 horas
             for (let i = 11; i >= 0; i--) {
                 const time = new Date(now.getTime() - i * 3600000);
+                const localTemp = realtimeData.local.temperatura ?? 15; 
+                const localHum = realtimeData.local.humedad ?? 60; 
+
                 data.push({
                     hora: time.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
-                    // Los datos simulados se basan en los valores en tiempo real (Firebase y OpenWeather)
-                    Local: realtimeData.local.temperatura + (Math.random() * 2 - 1),
-                    Sala: realtimeData.sala.temperatura + (Math.random() * 2 - 1),
-                    Cuarto: realtimeData.cuarto.temperatura + (Math.random() * 2 - 1)
+                    
+                    // Almacenamos ambos valores para que el gráfico los use.
+                    Local_Temp: localTemp + (Math.random() * 2 - 1),
+                    Sala_Temp: realtimeData.sala.temperatura + (Math.random() * 2 - 1),
+                    Cuarto_Temp: realtimeData.cuarto.temperatura + (Math.random() * 2 - 1),
+                    
+                    Local_Hum: localHum + (Math.random() * 5 - 2.5),
+                    Sala_Hum: realtimeData.sala.humedad + (Math.random() * 5 - 2.5),
+                    Cuarto_Hum: realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5),
                 });
             }
             return data;
@@ -286,36 +309,17 @@
             return data;
         };
         
-        // ----------------------------------------------------------------------
-        // FUNCIONES DE API
-        // ----------------------------------------------------------------------
-
-        /**
-         * Obtiene la temperatura y humedad exterior de Ambato usando OpenWeatherMap.
-         * @returns {Promise<{temperatura: number, humedad: number} | null>}
-         */
+        // Función de API (sin cambios)
         const fetchOpenWeatherMapData = async () => {
             try {
                 const response = await fetch(OPENWEATHER_URL);
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
                 const data = await response.json();
-
-                // OpenWeatherMap devuelve la temperatura en Kelvin. La convertimos a Celsius.
-                // Fórmula: Celsius = Kelvin - 273.15
                 const tempKelvin = data.main.temp;
                 const tempCelsius = tempKelvin - 273.15;
                 const humidity = data.main.humidity;
-
-                // Devuelve los datos limpios
-                return {
-                    temperatura: tempCelsius,
-                    humedad: humidity
-                };
-
+                return { temperatura: tempCelsius, humedad: humidity };
             } catch (error) {
-                // En caso de error (API Key incorrecta, ciudad no encontrada, etc.)
                 setError(`Error al obtener datos de OpenWeatherMap: ${error.message}`);
                 console.error("OpenWeatherMap Fetch Error:", error);
                 return null;
@@ -341,38 +345,51 @@
             tempCuarto.textContent = `${realtimeData.cuarto.temperatura.toFixed(1)}°`;
             humCuarto.textContent = `Humedad: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
         };
-
-        const renderComparisonChart = (data) => {
+        
+        /**
+         * Renderiza el gráfico de comparación (Líneas) basado en el tipo de dato.
+         * @param {Array} data - Datos históricos.
+         * @param {string} dataType - 'temperatura' o 'humedad'.
+         */
+        const renderComparisonChart = (data, dataType) => {
             if (comparisonChartInstance) {
                 comparisonChartInstance.destroy();
             }
 
+            const isTemperature = dataType === 'temperatura';
+            const unit = isTemperature ? '°C' : '%';
+            const dataSuffix = isTemperature ? '_Temp' : '_Hum';
+            const labelTitle = isTemperature ? 'Temperatura' : 'Humedad';
+
             const ctx = document.getElementById('comparison-chart').getContext('2d');
             comparisonChartInstance = new Chart(ctx, {
-                type: 'bar',
+                type: 'line', 
                 data: {
                     labels: data.map(d => d.hora),
                     datasets: [
                         {
-                            label: 'Local (Exterior)',
-                            data: data.map(d => d.Local),
-                            backgroundColor: 'rgba(251, 191, 36, 0.7)',
+                            label: `${labelTitle} Local (Exterior)`,
+                            data: data.map(d => d['Local' + dataSuffix]),
                             borderColor: '#fbbf24',
-                            borderWidth: 1
+                            tension: 0.4, 
+                            fill: false,
+                            pointRadius: 3
                         },
                         {
-                            label: 'Sala (Firebase)',
-                            data: data.map(d => d.Sala),
-                            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                            label: `${labelTitle} Sala (Firebase)`,
+                            data: data.map(d => d['Sala' + dataSuffix]),
                             borderColor: '#10b981',
-                            borderWidth: 1
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 3
                         },
                         {
-                            label: 'Cuarto (Firebase)',
-                            data: data.map(d => d.Cuarto),
-                            backgroundColor: 'rgba(6, 182, 212, 0.7)',
+                            label: `${labelTitle} Cuarto (Firebase)`,
+                            data: data.map(d => d['Cuarto' + dataSuffix]),
                             borderColor: '#06b6d4',
-                            borderWidth: 1
+                            tension: 0.4,
+                            fill: false,
+                            pointRadius: 3
                         }
                     ]
                 },
@@ -381,7 +398,16 @@
                     maintainAspectRatio: false,
                     scales: {
                         x: { grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } },
-                        y: { beginAtZero: false, grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } }
+                        y: { 
+                            beginAtZero: false, 
+                            grid: { color: '#3341554d' }, 
+                            ticks: { 
+                                color: '#94a3b8',
+                                callback: function(value) {
+                                    return value.toFixed(1) + unit; // Añadir unidad a las etiquetas del eje Y
+                                }
+                            } 
+                        }
                     },
                     plugins: { legend: { labels: { color: '#94a3b8' } } }
                 }
@@ -392,63 +418,30 @@
             if (historicalChartInstance) {
                 historicalChartInstance.destroy();
             }
-
+            // Mantenemos esta función simple ya que solo tiene datos de temperatura simulados por ahora
             const ctx = document.getElementById('historical-chart').getContext('2d');
             historicalChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: data1.map(d => d.hora),
                     datasets: [
-                        {
-                            label: `Local ${label1}`,
-                            data: data1.map(d => d.Local),
-                            borderColor: '#fbbf24',
-                            borderDash: [0, 0],
-                            tension: 0.4
-                        },
-                        {
-                            label: `Sala ${label1}`,
-                            data: data1.map(d => d.Sala),
-                            borderColor: '#10b981',
-                            borderDash: [0, 0],
-                            tension: 0.4
-                        },
-                        {
-                            label: `Cuarto ${label1}`,
-                            data: data1.map(d => d.Cuarto),
-                            borderColor: '#06b6d4',
-                            borderDash: [0, 0],
-                            tension: 0.4
-                        },
-                        {
-                            label: `Local ${label2}`,
-                            data: data2.map(d => d.Local),
-                            borderColor: '#fbbf24',
-                            borderDash: [5, 5],
-                            tension: 0.4
-                        },
-                        {
-                            label: `Sala ${label2}`,
-                            data: data2.map(d => d.Sala),
-                            borderColor: '#10b981',
-                            borderDash: [5, 5],
-                            tension: 0.4
-                        },
-                        {
-                            label: `Cuarto ${label2}`,
-                            data: data2.map(d => d.Cuarto),
-                            borderColor: '#06b6d4',
-                            borderDash: [5, 5],
-                            tension: 0.4
-                        }
+                        { label: `Local ${label1}`, data: data1.map(d => d.Local), borderColor: '#fbbf24', borderDash: [0, 0], tension: 0.4, fill: false },
+                        { label: `Sala ${label1}`, data: data1.map(d => d.Sala), borderColor: '#10b981', borderDash: [0, 0], tension: 0.4, fill: false },
+                        { label: `Cuarto ${label1}`, data: data1.map(d => d.Cuarto), borderColor: '#06b6d4', borderDash: [0, 0], tension: 0.4, fill: false },
+                        { label: `Local ${label2}`, data: data2.map(d => d.Local), borderColor: '#fbbf24', borderDash: [5, 5], tension: 0.4, fill: false },
+                        { label: `Sala ${label2}`, data: data2.map(d => d.Sala), borderColor: '#10b981', borderDash: [5, 5], tension: 0.4, fill: false },
+                        { label: `Cuarto ${label2}`, data: data2.map(d => d.Cuarto), borderColor: '#06b6d4', borderDash: [5, 5], tension: 0.4, fill: false }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     scales: {
                         x: { grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } },
-                        y: { beginAtZero: false, grid: { color: '#3341554d' }, ticks: { color: '#94a3b8' } }
+                        y: { 
+                            beginAtZero: false, 
+                            grid: { color: '#3341554d' }, 
+                            ticks: { color: '#94a3b8' } 
+                        }
                     },
                     plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 15, padding: 8 } } }
                 }
@@ -456,27 +449,105 @@
         };
 
         // ----------------------------------------------------------------------
-        // FIREBASE LISTENER MODIFICADO
+        // LÓGICA DE PESTAÑAS (NUEVA)
+        // ----------------------------------------------------------------------
+        const switchTab = (dataType) => {
+            currentChartDataType = dataType;
+            
+            // 1. Manejar estilos de los botones
+            tabButtons.forEach(button => {
+                if (button.dataset.tab === dataType) {
+                    button.classList.add('border-cyan-500', 'text-cyan-400');
+                    button.classList.remove('border-transparent', 'text-slate-400', 'hover:text-slate-300');
+                } else {
+                    button.classList.remove('border-cyan-500', 'text-cyan-400');
+                    button.classList.add('border-transparent', 'text-slate-400', 'hover:text-slate-300');
+                }
+            });
+            
+            // 2. Renderizar el gráfico con los datos correspondientes
+            if (historicalData.length > 0) {
+                renderComparisonChart(historicalData, dataType);
+            }
+        };
+
+
+        // ----------------------------------------------------------------------
+        // FUNCIÓN DE DESCARGA CSV (MODIFICADA para incluir Humedad)
+        // ----------------------------------------------------------------------
+        const downloadCsv = () => {
+            if (historicalData.length === 0) {
+                alert("No hay datos históricos para descargar.");
+                return;
+            }
+
+            // 1. Cabeceras del CSV (Añadidas columnas de Humedad)
+            const header = "Hora,Local Temp (°C),Local Hum (%),Sala Temp (°C),Sala Hum (%),Cuarto Temp (°C),Cuarto Hum (%)\n";
+
+            // 2. Mapeo de datos
+            const csvData = historicalData.map(item => {
+                return [
+                    item.hora,
+                    item.Local_Temp.toFixed(2),
+                    item.Local_Hum.toFixed(2),
+                    item.Sala_Temp.toFixed(2),
+                    item.Sala_Hum.toFixed(2),
+                    item.Cuarto_Temp.toFixed(2),
+                    item.Cuarto_Hum.toFixed(2)
+                ].join(',');
+            }).join('\n'); 
+
+            const finalCsv = header + csvData;
+
+            // 3. Crear el blob y forzar la descarga
+            const blob = new Blob([finalCsv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `datos_historicos_temp_hum_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+
+        // ----------------------------------------------------------------------
+        // FUNCIÓN DE ACTUALIZACIÓN DE OPENWEATHERMAP
+        // ----------------------------------------------------------------------
+        const updateOpenWeatherMap = async () => {
+            const openWeatherData = await fetchOpenWeatherMapData();
+
+            if (openWeatherData) {
+                realtimeData.local.temperatura = openWeatherData.temperatura;
+                realtimeData.local.humedad = openWeatherData.humedad;
+                
+                // Si el listener de Firebase ya está activo, no necesitamos llamar a renderCurrentStats,
+                // ya que generateHistoricalData se encargará de esto en el próximo tick, 
+                // pero lo mantenemos para el caso de una actualización aislada.
+                renderCurrentStats(); 
+            }
+        };
+
+
+        // ----------------------------------------------------------------------
+        // FIREBASE LISTENER 
         // ----------------------------------------------------------------------
         const setupFirebaseListener = () => {
-            dataRef.on('value', async (snapshot) => { // ¡Añadimos 'async' aquí!
+            dataRef.on('value', async (snapshot) => { 
                 loadingSpinner.classList.add('hidden');
                 
                 const data = snapshot.val();
 
                 if (!data) {
                     setError('No hay datos disponibles en Firebase.');
-                    // Intentamos obtener OpenWeatherMap incluso si Firebase falla, pero no podemos actualizar los gráficos
-                    const openWeatherData = await fetchOpenWeatherMapData();
-                    if (openWeatherData) {
-                        realtimeData.local.temperatura = openWeatherData.temperatura;
-                        realtimeData.local.humedad = openWeatherData.humedad;
-                        renderCurrentStats();
-                    }
+                    renderCurrentStats(); 
                     return;
                 }
 
-                // --- 1. Obtener Datos Locales de Firebase (Sala y Cuarto) ---
+                // Obtener Datos de Firebase (Sala y Cuarto)
                 realtimeData.sala = {
                     temperatura: parseFloat(data.sala?.temperatura || 0),
                     humedad: parseFloat(data.sala?.humedad || 0)
@@ -486,26 +557,14 @@
                     humedad: parseFloat(data.cuarto?.humedad || 0)
                 };
                 
-                // --- 2. Obtener Datos Exteriores de OpenWeatherMap (Local) ---
-                const openWeatherData = await fetchOpenWeatherMapData();
-
-                if (openWeatherData) {
-                    realtimeData.local.temperatura = openWeatherData.temperatura;
-                    realtimeData.local.humedad = openWeatherData.humedad;
-                    setError(null); // Limpiar errores si OpenWeather fue exitoso
-                } else {
-                    // Si falla OpenWeather, usamos los valores por defecto o del último fetch
-                    realtimeData.local.temperatura = realtimeData.local.temperatura ?? 0;
-                    realtimeData.local.humedad = realtimeData.local.humedad ?? 0;
-                }
-
-                // --- 3. Actualizar UI ---
-                // Generar datos históricos simulados (Ahora usa los nuevos valores de realtimeData)
+                // Actualizar UI y Gráficos
                 historicalData = generateHistoricalData(); 
 
                 renderCurrentStats();
-                renderComparisonChart(historicalData);
+                // Renderizar el gráfico con la pestaña actualmente seleccionada
+                renderComparisonChart(historicalData, currentChartDataType); 
                 lastUpdateSpan.textContent = new Date().toLocaleTimeString('es-EC');
+                setError(null);
 
             }, (error) => {
                 loadingSpinner.classList.add('hidden');
@@ -515,61 +574,88 @@
         };
 
         // ----------------------------------------------------------------------
-        // PREDICCIÓN SIMPLE
+        // PREDICCIÓN CON HORAS (Sin cambios en lógica)
         // ----------------------------------------------------------------------
         const generatePrediction = () => {
-            // Predicción simple: promedio + pequeña variación aleatoria
-            // Usamos 0 si el valor de OpenWeather es null (aún no ha cargado)
-            const baseLocalTemp = realtimeData.local.temperatura ?? 0;
-            const baseLocalHum = realtimeData.local.humedad ?? 0;
+            predictionResultsDiv.innerHTML = '';
             
-            const predLocal = baseLocalTemp + (Math.random() * 2 - 1);
-            const predSala = realtimeData.sala.temperatura + (Math.random() * 2 - 1);
-            const predCuarto = realtimeData.cuarto.temperatura + (Math.random() * 2 - 1);
-            
-            const predLocalHum = baseLocalHum + (Math.random() * 5 - 2.5);
-            const predSalaHum = realtimeData.sala.humedad + (Math.random() * 5 - 2.5);
-            const predCuartoHum = realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5);
+            const now = new Date();
+            let htmlContent = '';
 
-            document.getElementById('pred-local-temp').textContent = `${predLocal.toFixed(1)}°`;
-            document.getElementById('pred-local-hum').textContent = `Hum: ${predLocalHum.toFixed(1)}%`;
-            
-            document.getElementById('pred-sala-temp').textContent = `${predSala.toFixed(1)}°`;
-            document.getElementById('pred-sala-hum').textContent = `Hum: ${predSalaHum.toFixed(1)}%`;
-            
-            document.getElementById('pred-cuarto-temp').textContent = `${predCuarto.toFixed(1)}°`;
-            document.getElementById('pred-cuarto-hum').textContent = `Hum: ${predCuartoHum.toFixed(1)}%`;
+            for (let i = 1; i <= 4; i++) {
+                const nextTime = new Date(now.getTime() + i * 3600000);
+                const hourLabel = nextTime.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+
+                const predLocal = (realtimeData.local.temperatura ?? 15) + (Math.random() * 2 - 1);
+                const predSala = realtimeData.sala.temperatura + (Math.random() * 2 - 1);
+                const predCuarto = realtimeData.cuarto.temperatura + (Math.random() * 2 - 1);
+                
+                const predLocalHum = (realtimeData.local.humedad ?? 60) + (Math.random() * 5 - 2.5);
+                const predSalaHum = realtimeData.sala.humedad + (Math.random() * 5 - 2.5);
+                const predCuartoHum = realtimeData.cuarto.humedad + (Math.random() * 5 - 2.5);
+                
+                htmlContent += `
+                    <div class="p-3 bg-slate-700/50 rounded-lg border border-slate-600/50">
+                        <h4 class="text-lg font-bold text-cyan-300 mb-1">${hourLabel}</h4>
+                        <div class="grid grid-cols-3 text-sm text-white font-medium">
+                            <div>Local: <span class="text-red-400">${predLocal.toFixed(1)}°</span> / ${predLocalHum.toFixed(1)}%</div>
+                            <div>Sala: <span class="text-green-400">${predSala.toFixed(1)}°</span> / ${predSalaHum.toFixed(1)}%</div>
+                            <div>Cuarto: <span class="text-blue-400">${predCuarto.toFixed(1)}°</span> / ${predCuartoHum.toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            predictionResultsDiv.innerHTML = htmlContent;
         };
+
 
         // ----------------------------------------------------------------------
         // INICIALIZACIÓN
         // ----------------------------------------------------------------------
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
+            
             setupFirebaseListener();
+            updateOpenWeatherMap(); 
+            setInterval(updateOpenWeatherMap, 60000); 
 
-            // Configurar fechas
+            // Configurar fechas iniciales
             const today = new Date().toISOString().split('T')[0];
             const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
             date1Input.value = yesterday;
             date2Input.value = today;
-            predictionDate.value = new Date(Date.now() + 86400000).toISOString().split('T')[0]; // Mañana
+            predictionDate.value = today; 
 
-            // Renderizar comparación inicial
+            // Renderizar comparación inicial (Mock Data)
             const hist1 = generateMockHistoryForDate();
             const hist2 = generateMockHistoryForDate();
             renderHistoricalChart(hist1, hist2, yesterday, today);
 
-            // Event listeners
+            // --- EVENT LISTENERS ---
+            
+            // Pestañas (Tabs)
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const dataType = button.dataset.tab;
+                    switchTab(dataType);
+                });
+            });
+            // Asegurar que se renderice la pestaña inicial de 'temperatura'
+            switchTab('temperatura'); 
+
+            // Comparación por Fecha
             compareButton.addEventListener('click', () => {
                 const newHist1 = generateMockHistoryForDate();
                 const newHist2 = generateMockHistoryForDate();
                 renderHistoricalChart(newHist1, newHist2, date1Input.value, date2Input.value);
             });
 
-            predictButton.addEventListener('click', () => {
-                generatePrediction();
-            });
+            // Predicción
+            predictButton.addEventListener('click', generatePrediction);
+
+            // Descarga CSV
+            downloadCsvButton.addEventListener('click', downloadCsv);
         });
     </script>
 </body>
