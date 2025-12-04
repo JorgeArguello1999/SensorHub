@@ -8,28 +8,29 @@ export const firebaseConfig = {
 };
 
 // ----------------------------------------------------------------------
-// CONFIGURACIÓN OPENWEATHERMAP
+// CONFIGURACIÓN API LOCAL (FLASK)
 // ----------------------------------------------------------------------
-export const OPENWEATHER_API_KEY = "157973ff5bf045a8c66f1b4d7eab78aa";
-export const LATITUDE = -1.27442;
-export const LONGITUDE = -78.638786;
-export const OPENWEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?lat=${LATITUDE}&lon=${LONGITUDE}&APPID=${OPENWEATHER_API_KEY}`;
+// Apuntamos a tu servidor local
+export const OPENWEATHER_URL = "/api/weather/";
 
 // ----------------------------------------------------------------------
 // VARIABLES DE ESTADO GLOBALES
 // ----------------------------------------------------------------------
 export let realtimeData = {
-  local: { temperatura: null, humedad: null },
+  local: { temperatura: 0, humedad: 0 }, // Inicializamos en 0 para evitar nulls en la gráfica
   sala: { temperatura: 0, humedad: 0 },
   cuarto: { temperatura: 0, humedad: 0 },
 };
-export let historicalData = [];
+
+// Array para guardar la historia real
+export let historicalData = []; 
+
 export let comparisonChartInstance = null;
 export let historicalChartInstance = null;
-export let currentChartDataType = "temperatura"; // Controla la pestaña activa
+export let currentChartDataType = "temperatura"; 
 
 // ----------------------------------------------------------------------
-// REFERENCIAS DOM (inicializadas más tarde)
+// REFERENCIAS DOM 
 // ----------------------------------------------------------------------
 export let loadingSpinner = null;
 export let lastUpdateSpan = null;
@@ -51,9 +52,6 @@ export let predictionDate = null;
 export let predictButton = null;
 export let predictionResultsDiv = null;
 
-/**
- * Inicializa referencias DOM. Llamar en DOMContentLoaded antes de usar elementos.
- */
 export const initDOMRefs = () => {
   loadingSpinner = document.getElementById("loading-spinner");
   lastUpdateSpan = document.getElementById("last-update");

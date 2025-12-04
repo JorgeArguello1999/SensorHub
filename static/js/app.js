@@ -4,79 +4,45 @@ import {
   loadingSpinner,
   lastUpdateSpan,
   realtimeData,
-  historicalData,
   date1Input,
   date2Input,
   compareButton,
-  predictionDate,
   predictButton,
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
 } from "./config.js";
 
-import { fetchOpenWeatherMapData, dataRef } from "./api.js"; // función API y referencia a Firebase
-import {
-  setError,
-  generateHistoricalData,
-  generateMockHistoryForDate,
-  downloadCsv,
-} from "./utils.js"; // Importa utilidades
-
+import { fetchOpenWeatherMapData, dataRef } from "./api.js";
+import { setError, generateMockHistoryForDate, downloadCsv } from "./utils.js";
 import {
   renderCurrentStats,
-  renderComparisonChart,
+  initComparisonChart,    // IMPORTADO
+  updateChartRealTime,    // IMPORTADO
   renderHistoricalChart,
   switchTab,
-  generatePrediction, // Renombrada de `generatePrediction` en ui.js para evitar conflictos
-} from "./ui.js"; // Importa funciones de UI/Renderizado
+  generatePrediction,
+} from "./ui.js";
 
-// Estado local (no reasignamos imports)
-let currentChartDataType = "temperatura";
+// Variable de estado para saber qué estamos graficando
+let activeTab = "temperatura";
 
 // ----------------------------------------------------------------------
-// GESTIÓN DE FIREBASE Y DATOS
+// DATOS
 // ----------------------------------------------------------------------
 
-/**
- * Actualiza los datos de OpenWeatherMap y la UI.
- */
 const updateOpenWeatherMap = async () => {
-  // fetchOpenWeatherMapData ya actualiza `realtimeData.local` internamente.
-  const openWeatherData = await fetchOpenWeatherMapData();
-
-  // Si el listener de Firebase está activo, `setupFirebaseListener`
-  // llamará a `renderCurrentStats` y `renderComparisonChart` en el próximo tick.
-  // Si no, la llamamos aquí para que la tarjeta local se actualice inmediatamente.
-  if (openWeatherData) {
-    renderCurrentStats();
-  }
+  // Petición a tu API Flask Local
+  const data = await fetchOpenWeatherMapData();
+  if (data) renderCurrentStats();
 };
 
-/**
- * Configura el listener principal de Firebase.
- */
 const setupFirebaseListener = () => {
-  if (!dataRef) {
-    setError("Error: No se pudo conectar a la base de datos de Firebase.");
+  if (!dataRef) return;
+  dataRef.on("value", (snapshot) => {
     loadingSpinner.classList.add("hidden");
-    return;
-  }
-
-  dataRef.on(
-    "value",
-    (snapshot) => {
-      loadingSpinner.classList.add("hidden");
-
-      const data = snapshot.val();
-
-      if (!data) {
-        setError("No hay datos disponibles en Firebase.");
-        renderCurrentStats();
-        return;
-      }
-
-      // 1. Actualizar estado global (realtimeData)
+    const data = snapshot.val();
+    if (data) {
       realtimeData.sala = {
         temperatura: parseFloat(data.sala?.temperatura || 0),
         humedad: parseFloat(data.sala?.humedad || 0),
@@ -85,92 +51,73 @@ const setupFirebaseListener = () => {
         temperatura: parseFloat(data.cuarto?.temperatura || 0),
         humedad: parseFloat(data.cuarto?.humedad || 0),
       };
-
-      // 2. Generar y actualizar datos históricos
-      historicalData.length = 0; // Limpiar el array
-      historicalData.push(...generateHistoricalData(realtimeData));
-
-      // 3. Actualizar UI
+      // Solo actualizamos los textos, NO el gráfico aquí (el gráfico va por tiempo)
       renderCurrentStats();
-      renderComparisonChart(historicalData, currentChartDataType);
       lastUpdateSpan.textContent = new Date().toLocaleTimeString("es-EC");
-      setError(null);
-    },
-    (error) => {
-      loadingSpinner.classList.add("hidden");
-      setError(`Error de Firebase: ${error.code}`);
-      console.error("Firebase error:", error);
     }
-  );
+  });
 };
 
 // ----------------------------------------------------------------------
-// GESTIÓN DE EVENTOS
+// BUCLE DE ANIMACIÓN DEL GRÁFICO
 // ----------------------------------------------------------------------
+const startChartLoop = () => {
+    // Cada 2 segundos, añadimos un punto al gráfico
+    setInterval(async () => {
+        // 1. Aseguramos tener el dato más fresco de la API local
+        // (Opcional: puedes sacarlo fuera si quieres menos peticiones, 
+        // pero así aseguras sincronización exacta en el gráfico)
+        await updateOpenWeatherMap(); 
 
+        // 2. Actualizamos el gráfico con lo que haya en 'realtimeData' en ese momento
+        updateChartRealTime(activeTab);
+        
+    }, 2000); // 2 segundos por punto
+};
+
+// ----------------------------------------------------------------------
+// EVENTOS
+// ----------------------------------------------------------------------
 const setupEventListeners = () => {
-  // Pestañas (Tabs)
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const newDataType = button.dataset.tab;
-      // Actualizamos el estado global de la pestaña y re-renderizamos
-      currentChartDataType = switchTab(newDataType);
+      activeTab = switchTab(button.dataset.tab);
     });
   });
 
-  // Comparación por Fecha
   compareButton.addEventListener("click", () => {
+    // Lógica histórica
     const hist1 = generateMockHistoryForDate();
     const hist2 = generateMockHistoryForDate();
-    renderHistoricalChart(
-      hist1,
-      hist2,
-      date1Input.value,
-      date2Input.value
-    );
+    renderHistoricalChart(hist1, hist2, date1Input.value, date2Input.value);
   });
 
-  // Predicción
   predictButton.addEventListener("click", generatePrediction);
-
-  // Descarga CSV
   downloadCsvButton.addEventListener("click", downloadCsv);
 };
 
 // ----------------------------------------------------------------------
-// INICIALIZACIÓN
+// INICIO
 // ----------------------------------------------------------------------
-
 document.addEventListener("DOMContentLoaded", () => {
-  // Inicializar referencias DOM
   initDOMRefs();
-
-  // Asegúrate de que `lucide` esté cargado globalmente (si lo usas)
-  if (typeof lucide !== 'undefined' && lucide.createIcons) {
-      lucide.createIcons();
-  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 
   setupFirebaseListener();
-  updateOpenWeatherMap();
-  // Actualizar OpenWeatherMap cada 60 segundos
-  setInterval(updateOpenWeatherMap, 60000);
+  
+  // Inicializamos el gráfico vacío
+  initComparisonChart(activeTab);
+  
+  // Iniciamos el bucle que alimenta el gráfico
+  startChartLoop();
 
-  // Configurar fechas iniciales
+  // Configuración inicial de fechas
   const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-  date1Input.value = yesterday;
+  date1Input.value = today;
   date2Input.value = today;
-  predictionDate.value = today;
-
-  // Renderizar comparación histórica inicial (Mock Data)
-  const hist1 = generateMockHistoryForDate();
-  const hist2 = generateMockHistoryForDate();
-  renderHistoricalChart(hist1, hist2, yesterday, today);
-
-  // Configurar listeners de eventos
+  
   setupEventListeners();
-
-  // Asegurar que se renderice la pestaña inicial de 'temperatura'
-  // El `switchTab` de `ui.js` maneja los estilos y el renderizado inicial.
-  currentChartDataType = switchTab("temperatura");
+  
+  // Render inicial
+  activeTab = switchTab("temperatura");
 });

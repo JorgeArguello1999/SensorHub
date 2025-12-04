@@ -3,45 +3,47 @@ import {
   firebaseConfig,
   OPENWEATHER_URL,
   realtimeData,
-} from "./config.js"; // Cosas de configuración
-import { setError } from "./utils.js"; // Cosas de utilidad y manejo de errores
+} from "./config.js"; 
+import { setError } from "./utils.js"; 
 
-// Inicialización de Firebase
 let app;
 try {
-  // Asegúrate de que `firebase` esté cargado globalmente (p. ej., a través de una etiqueta <script>)
   app = firebase.initializeApp(firebaseConfig);
 } catch (e) {
   console.error("Error al inicializar Firebase.", e);
-  // No llamamos a setError porque la UI no se ha cargado completamente aún
 }
 
 export const db = app ? app.database() : null;
 export const dataRef = db ? db.ref("/") : null;
 
 /**
- * Obtiene la temperatura y humedad local de OpenWeatherMap.
- * @returns {Promise<{temperatura: number, humedad: number} | null>}
+ * Obtiene datos desde tu API Flask local.
  */
 export const fetchOpenWeatherMapData = async () => {
-  if (!OPENWEATHER_URL) return null; // Fallback si no está configurada
+  if (!OPENWEATHER_URL) return null;
 
   try {
     const response = await fetch(OPENWEATHER_URL);
+    
     if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+    
+    // Parseamos el JSON con tu estructura
     const data = await response.json();
-    const tempKelvin = data.main.temp;
-    const tempCelsius = tempKelvin - 273.15;
-    const humidity = data.main.humidity;
+    
+    // Extraemos directamente las propiedades de tu respuesta
+    const tempCelsius = parseFloat(data.temperatura);
+    const humidity = parseFloat(data.humedad);
 
-    // Actualizamos el estado global aquí antes de devolver
+    // Actualizamos el estado global
     realtimeData.local.temperatura = tempCelsius;
     realtimeData.local.humedad = humidity;
 
     return { temperatura: tempCelsius, humedad: humidity };
+
   } catch (error) {
-    setError(`Error al obtener datos de OpenWeatherMap: ${error.message}`);
-    console.error("OpenWeatherMap Fetch Error:", error);
+    // Si falla la API local, no rompemos todo, solo logueamos
+    console.error("API Fetch Error:", error);
+    setError(`Error conectando a API Flask: ${error.message}`);
     return null;
   }
 };
