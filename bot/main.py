@@ -4,6 +4,7 @@ import sys
 import time
 import requests
 from datetime import datetime
+import pytz
 from sseclient import SSEClient
 
 # --- IMPORTACIONES DE FIREBASE ADMIN ---
@@ -21,6 +22,9 @@ load_dotenv()
 # ==========================================
 # 1. CONFIGURACIÓN
 # ==========================================
+
+# Timezone de Ecuador (Quito)
+TIMEZONE_QUITO = pytz.timezone('America/Guayaquil')
 
 # URL de Firebase Realtime Database (SSE)
 FIREBASE_RTDB_URL = "https://esp32-firebase-69994-default-rtdb.firebaseio.com/.json"
@@ -95,10 +99,10 @@ def obtener_clima_local():
 
 def guardar_en_firestore():
     """
-    Guarda el estado actual completo en Firestore usando el timestamp como ID.
+    Guarda el estado actual completo en Firestore usando el timestamp de Quito como ID.
     """
     try:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(TIMEZONE_QUITO).strftime("%Y-%m-%d %H:%M:%S")
         doc_ref = db.collection('historial_sensores').document(timestamp)
         doc_ref.set(datos_sensores)
         print(f"💾 Guardado en Firestore: {timestamp}")
