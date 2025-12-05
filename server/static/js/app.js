@@ -7,10 +7,10 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
-  modeRealtimeBtn,
-  modeHistoryBtn,
+  modeRealtimeBtn, // Referencia al botón Live
+  modeHistoryBtn,  // Referencia al botón Historial
   historyHoursInput,
-  chartMode as initialChartMode // Renombramos para usar variable local mutable
+  chartMode as initialChartMode
 } from "./config.js";
 
 import { fetchHourlyHistory } from "./api.js";
@@ -21,7 +21,7 @@ import {
   updateChartRealTime,
   renderStaticChart, 
   switchTab,
-  toggleModeUI,      
+  toggleModeUI, // Asegúrate de que esta función en ui.js NO oculte los botones, solo cambie clases
   getVisibleChartData,
 } from "./ui.js";
 
@@ -32,329 +32,242 @@ let activeTab = "temperatura";
 let chartMode = "realtime"; 
 
 // ----------------------------------------------------------------------
-// PREDICCIONES (Lógica Matemática Real)
+// PREDICCIONES (IA)
 // ----------------------------------------------------------------------
 const updatePredictions = async () => {
-    // 1. Obtener datos recientes para calcular tendencia (6 horas es ideal)
-    const hoursForTrend = 6;
+    // Usamos 12 horas para tener una buena tendencia para la regresión
+    const hoursForTrend = 12;
     let data = [];
     
     try {
         data = await fetchHourlyHistory(hoursForTrend);
-    } catch (e) {
-        console.error("Error obteniendo datos para predicción", e);
-        return;
-    }
+    } catch (e) { console.error(e); return; }
 
-    if (!data || data.length < 2) {
-        const errHtml = '<span class="text-red-400">Insuficientes datos</span>';
-        ['pred-morning', 'pred-afternoon', 'pred-night'].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.innerHTML = errHtml;
-        });
-        return;
-    }
+    if (!data || data.length < 2) return;
 
-    // 2. Preparar datos para Regresión (Mapeo)
-    const dataSala = data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.sala_temp) }));
-    const dataCuarto = data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.cuarto_temp) }));
-    const dataLocal = data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.local_temp) }));
+    // Crear Modelos
+    const modelSala = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.sala_temp) })));
+    const modelCuarto = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.cuarto_temp) })));
+    const modelLocal = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.local_temp) })));
 
-    // 3. Crear Modelos
-    const modelSala = createLinearRegressionModel(dataSala);
-    const modelCuarto = createLinearRegressionModel(dataCuarto);
-    const modelLocal = createLinearRegressionModel(dataLocal);
+    if(!modelSala) return;
 
-    if(!modelSala || !modelCuarto || !modelLocal) return;
-
-    // 4. Fechas Objetivo (Hoy)
+    // Fechas Objetivo
     const now = new Date();
     const morning = new Date(now); morning.setHours(9, 0, 0);
     const afternoon = new Date(now); afternoon.setHours(14, 0, 0);
     const night = new Date(now); night.setHours(20, 0, 0);
 
-    // 5. Renderizar Tarjetas
-    const renderPredictionCard = (elementId, timeObj) => {
-        const el = document.getElementById(elementId);
+    const render = (id, time) => {
+        const el = document.getElementById(id);
         if(!el) return;
-
-        // Predecir valores
-        const pSala = modelSala.predict(timeObj).toFixed(1);
-        const pCuarto = modelCuarto.predict(timeObj).toFixed(1);
-        const pLocal = modelLocal.predict(timeObj).toFixed(1);
-
         el.innerHTML = `
-            <div class="flex justify-between w-full mt-1">
-                <span class="text-emerald-400 font-bold">${pSala}°</span>
-                <span class="text-cyan-400 font-bold">${pCuarto}°</span>
-                <span class="text-amber-400 font-bold">${pLocal}°</span>
+            <div class="flex justify-between w-full mt-1 px-1">
+                <span class="text-emerald-400 font-bold">${modelSala.predict(time).toFixed(1)}°</span>
+                <span class="text-cyan-400 font-bold">${modelCuarto.predict(time).toFixed(1)}°</span>
+                <span class="text-amber-400 font-bold">${modelLocal.predict(time).toFixed(1)}°</span>
             </div>
-             <div class="flex justify-between w-full text-[9px] text-slate-500">
+            <div class="flex justify-between w-full text-[9px] text-slate-500 px-1 mt-0.5">
                 <span>Sala</span><span>Cto</span><span>Ext</span>
             </div>
         `;
     };
 
-    renderPredictionCard('pred-morning', morning);
-    renderPredictionCard('pred-afternoon', afternoon);
-    renderPredictionCard('pred-night', night);
+    render('pred-morning', morning);
+    render('pred-afternoon', afternoon);
+    render('pred-night', night);
 
-    // 6. Configurar Botón Personalizado
+    // Lógica botón custom
     const btnCustom = document.getElementById('btn-predict-custom');
     if (btnCustom) {
         btnCustom.onclick = () => {
-            const timeInput = document.getElementById('pred-time-input').value; // "15:30"
+            const timeInput = document.getElementById('pred-time-input').value;
             if (!timeInput) return;
-
             const [h, m] = timeInput.split(':');
-            const targetTime = new Date();
-            targetTime.setHours(parseInt(h), parseInt(m), 0);
-
-            const valSala = modelSala.predict(targetTime).toFixed(1);
-            const valCuarto = modelCuarto.predict(targetTime).toFixed(1);
-
-            const resultDiv = document.getElementById('custom-prediction-result');
-            const resultVal = document.getElementById('custom-pred-value');
+            const t = new Date(); t.setHours(h, m, 0);
             
-            resultDiv.classList.remove('hidden');
-            resultVal.innerHTML = `<span class="text-emerald-400">${valSala}°</span> / <span class="text-cyan-400">${valCuarto}°</span>`;
+            document.getElementById('custom-prediction-result').classList.remove('hidden');
+            document.getElementById('custom-pred-value').innerText = `${modelSala.predict(t).toFixed(1)}°C`;
         };
     }
 };
 
 // ----------------------------------------------------------------------
-// STREAMING DE DATOS (SSE)
+// STREAM SSE
 // ----------------------------------------------------------------------
 const setupStreamListener = () => {
-  console.log("Iniciando conexión SSE...");
   const eventSource = new EventSource("/stream-data");
 
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-
-      // Actualizar Timestamp Global
       const timeString = data.id || new Date().toLocaleTimeString("es-EC");
+
       if (lastUpdateSpan) {
         lastUpdateSpan.textContent = `Actualizado: ${timeString}`;
         loadingSpinner.classList.add("hidden"); 
       }
 
-      // Actualizar Objeto Global de Datos
-      if (data.local) {
-        realtimeData.local.temperatura = parseFloat(data.local.temperatura || data.local.temp || 0);
-        realtimeData.local.humedad = parseFloat(data.local.humedad || data.local.hum || 0);
-      }
-      if (data.sala) {
-        realtimeData.sala.temperatura = parseFloat(data.sala.temperatura || 0);
-        realtimeData.sala.humedad = parseFloat(data.sala.humedad || 0);
-      }
-      if (data.cuarto) {
-        realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura || 0);
-        realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad || 0);
-      }
+      // Actualizar datos globales
+      if (data.local) { realtimeData.local.temperatura = parseFloat(data.local.temperatura||0); realtimeData.local.humedad = parseFloat(data.local.humedad||0); }
+      if (data.sala) { realtimeData.sala.temperatura = parseFloat(data.sala.temperatura||0); realtimeData.sala.humedad = parseFloat(data.sala.humedad||0); }
+      if (data.cuarto) { realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura||0); realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad||0); }
 
-      // 1. Actualizar Textos Grandes (KPIs)
       renderCurrentStats();
 
-      // 2. Si estamos en modo REALTIME, actualizar gráfico
+      // Solo actualizar gráfico si estamos en LIVE
       if (chartMode === 'realtime') {
           updateChartRealTime(activeTab);
           
-          // 3. Actualizar la nueva Tabla de Datos (Inserción directa al DOM)
+          // Actualizar tabla
           const tableBody = document.getElementById('data-table-body');
           if (tableBody) {
-              const rowHtml = `
+              const row = `
                 <tr class="border-b border-white/5 hover:bg-white/5 transition-colors animate-pulse-once">
                     <td class="p-3 text-slate-400 font-mono text-xs">${timeString}</td>
                     <td class="p-3 font-bold text-amber-500">${realtimeData.local.temperatura.toFixed(1)}°</td>
                     <td class="p-3 font-bold text-emerald-500">${realtimeData.sala.temperatura.toFixed(1)}°</td>
                     <td class="p-3 font-bold text-cyan-500">${realtimeData.cuarto.temperatura.toFixed(1)}°</td>
                     <td class="p-3"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1"></span> <span class="text-xs text-emerald-400">Recibido</span></td>
-                </tr>
-              `;
-              
-              // Eliminar mensaje de "Esperando..." si existe
+                </tr>`;
               if(tableBody.innerText.includes("Esperando")) tableBody.innerHTML = "";
-              
-              tableBody.insertAdjacentHTML('afterbegin', rowHtml);
-              
-              // Mantener solo 10 filas
+              tableBody.insertAdjacentHTML('afterbegin', row);
               if (tableBody.children.length > 10) tableBody.lastElementChild.remove();
           }
       }
-
-    } catch (error) {
-      console.error("Error SSE:", error);
-    }
-  };
-
-  eventSource.onerror = () => {
-    if (lastUpdateSpan) {
-      lastUpdateSpan.textContent = "Reconectando...";
-      lastUpdateSpan.classList.add("text-red-400");
-    }
+    } catch (e) { console.error("SSE Error", e); }
   };
 };
 
 // ----------------------------------------------------------------------
-// HELPER: Cargar Historial
+// CARGAR HISTORIAL
 // ----------------------------------------------------------------------
 const loadHistoryData = async () => {
-    const hours = parseInt(historyHoursInput.value) || 2;
+    const hours = parseInt(historyHoursInput.value) || 12; // Default 12 si falla parse
     const canvas = document.getElementById("comparison-chart");
     
-    // Feedback visual de carga
     if(canvas) canvas.style.opacity = "0.5";
-
-    const data = await fetchHourlyHistory(hours);
     
-    // Pintar gráfico estático
-    renderStaticChart(data, activeTab);
+    // Si estamos en modo historia, llamar API
+    if (chartMode === 'history') {
+        const data = await fetchHourlyHistory(hours);
+        renderStaticChart(data, activeTab);
+        
+        // Llenar tabla con historial también (opcional pero útil)
+        const tableBody = document.getElementById('data-table-body');
+        if (tableBody && data.length > 0) {
+            tableBody.innerHTML = ""; // Limpiar tabla
+            data.slice(0, 10).forEach(row => { // Mostrar últimos 10
+                 const tr = `
+                    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
+                        <td class="p-3 font-bold text-amber-500">${row.local_temp}°</td>
+                        <td class="p-3 font-bold text-emerald-500">${row.sala_temp}°</td>
+                        <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp}°</td>
+                        <td class="p-3"><span class="text-xs text-slate-500">Histórico</span></td>
+                    </tr>`;
+                 tableBody.insertAdjacentHTML('beforeend', tr);
+            });
+        }
+    }
     
     if(canvas) canvas.style.opacity = "1";
 };
 
 // ----------------------------------------------------------------------
-// EVENTOS & LISTENERS
+// SETUP PRINCIPAL
 // ----------------------------------------------------------------------
 const setupEventListeners = () => {
 
-  // 1. Pestañas (Temperatura / Humedad)
+  // 1. TABS TEMP / HUMEDAD
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      const newTab = button.dataset.tab;
-      if (newTab !== activeTab) {
-        activeTab = switchTab(newTab);
-        
-        // Si estamos en historial, recargar con la nueva unidad
-        if (chartMode === 'history') {
-            loadHistoryData();
-        }
+      if (button.dataset.tab !== activeTab) {
+        activeTab = switchTab(button.dataset.tab);
+        if (chartMode === 'history') loadHistoryData();
       }
     });
   });
 
-  // 2. Modo Tiempo Real (Botón LIVE)
+  // 2. CAMBIO DE MODO: EN VIVO
   if (modeRealtimeBtn) {
     modeRealtimeBtn.addEventListener("click", () => {
-      if (chartMode !== 'realtime') {
-        chartMode = 'realtime'; 
-        toggleModeUI('realtime');
+        chartMode = 'realtime';
         
-        // Estilos visuales del botón Live
-        modeRealtimeBtn.classList.remove('text-slate-500', 'bg-transparent');
-        modeRealtimeBtn.classList.add('bg-slate-800', 'text-cyan-400', 'border-cyan-500/30');
-
-        initComparisonChart(activeTab); // Limpia gráfico histórico
-      }
+        // Estilos CSS
+        modeRealtimeBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+        modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+        
+        // Ocultar Input de Horas
+        document.getElementById("history-controls").classList.add("hidden");
+        
+        // Limpiar gráfico
+        initComparisonChart(activeTab);
+        
+        // Limpiar tabla visualmente
+        const tableBody = document.getElementById('data-table-body');
+        if(tableBody) tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic" colspan="5">Modo En Vivo: Esperando datos...</td></tr>`;
     });
   }
 
-  // 3. Función Centralizada para Historial (Arregla el bug de botones)
-  const activateHistoryMode = (hours) => {
-      chartMode = 'history';
-      toggleModeUI('history');
+  // 3. CAMBIO DE MODO: HISTORIAL
+  if (modeHistoryBtn) {
+    modeHistoryBtn.addEventListener("click", () => {
+        chartMode = 'history';
 
-      // Actualizar input visualmente
-      if(historyHoursInput) historyHoursInput.value = hours;
+        // Estilos CSS
+        modeHistoryBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+        modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
 
-      // Desactivar visualmente botón Live
-      if(modeRealtimeBtn) {
-          modeRealtimeBtn.classList.add('text-slate-500', 'bg-transparent');
-          modeRealtimeBtn.classList.remove('bg-slate-800', 'text-cyan-400', 'border-cyan-500/30');
-      }
+        // Mostrar Input de Horas y poner 12 por defecto
+        const controls = document.getElementById("history-controls");
+        controls.classList.remove("hidden");
+        historyHoursInput.value = "12"; 
 
-      // Cargar datos
-      loadHistoryData();
-  };
+        // CARGAR DATOS AUTOMÁTICAMENTE (12h)
+        loadHistoryData();
+    });
+  }
 
-  // Botones Rápidos (6H, 12H, 24H)
-  const btn6h = document.getElementById('btn-hist-6h');
-  const btn12h = document.getElementById('btn-hist-12h');
-  const btn24h = document.getElementById('btn-hist-24h');
-  
-  if(btn6h) btn6h.addEventListener('click', () => activateHistoryMode(6));
-  if(btn12h) btn12h.addEventListener('click', () => activateHistoryMode(12));
-  if(btn24h) btn24h.addEventListener('click', () => activateHistoryMode(24));
-
-  // Botón Buscar Historial Personalizado
+  // 4. BOTÓN "BUSCAR" EN EL INPUT
   const btnSearch = document.getElementById('mode-history-search');
   if(btnSearch) {
       btnSearch.addEventListener('click', () => {
-          const h = parseInt(historyHoursInput.value) || 2;
-          activateHistoryMode(h);
+          loadHistoryData(); // Carga lo que tenga el input
+      });
+  }
+  
+  // 5. ENTER EN EL INPUT
+  if(historyHoursInput) {
+      historyHoursInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') loadHistoryData();
       });
   }
 
-  // 4. Descarga CSV
+  // 6. CSV DOWNLOAD
   if(downloadCsvButton) {
     downloadCsvButton.addEventListener("click", async () => {
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
-        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-
-        // Modo Historial (Descarga desde API)
         if (chartMode === 'history') {
-            try {
-                downloadCsvButton.textContent = "...";
-                const hours = parseInt(historyHoursInput.value) || 2;
-                const apiResponse = await fetchHourlyHistory(hours);
-                
-                if (!apiResponse || apiResponse.length === 0) {
-                    alert("No hay datos históricos.");
-                    return;
-                }
-
-                const headers = ["Timestamp", "Local Temp", "Local Hum", "Sala Temp", "Sala Hum", "Cuarto Temp", "Cuarto Hum"];
-                const rows = apiResponse.map(i => [i.timestamp, i.local_temp, i.local_hum, i.sala_temp, i.sala_hum, i.cuarto_temp, i.cuarto_hum]);
-
-                triggerCsvDownload(headers, rows, `historial_${hours}h_${dateStr}.csv`);
-
-            } catch (error) {
-                console.error("Error CSV historial:", error);
-            } finally {
-                downloadCsvButton.innerHTML = `<i data-lucide="download" class="w-3 h-3"></i> CSV`;
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-            }
-        } 
-        // Modo Realtime (Descarga visible)
-        else {
-            const rows = getVisibleChartData();
-            if (rows.length === 0) {
-                alert("Gráfico vacío. Espera a recibir datos.");
-                return;
-            }
-            const activeTabButton = document.querySelector(".tab-button.text-cyan-400");
-            const isTemp = activeTabButton ? activeTabButton.dataset.tab === "temperatura" : true;
-            const unit = isTemp ? "Temp" : "Hum";
-            const headers = ["Hora", `Local ${unit}`, `Sala ${unit}`, `Cuarto ${unit}`];
-            
-            triggerCsvDownload(headers, rows, `live_${unit}_${timeStr}.csv`);
+             const h = historyHoursInput.value || 12;
+             const data = await fetchHourlyHistory(h);
+             if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial.csv");
+        } else {
+             const rows = getVisibleChartData();
+             if(rows.length) triggerCsvDownload(["Hora", "Local", "Sala", "Cuarto"], rows, "live.csv");
         }
     });
   }
 };
 
-// ----------------------------------------------------------------------
-// INICIO
-// ----------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   initDOMRefs();
   if (typeof lucide !== 'undefined') lucide.createIcons();
-
-  // 1. Iniciar Gráfico
-  initComparisonChart(activeTab);
   
-  // 2. Iniciar Listeners
   setupEventListeners();
-
-  // 3. Iniciar Stream SSE
   setupStreamListener();
-  
-  // 4. Calcular Predicciones Iniciales (Regresión)
+  initComparisonChart(activeTab);
   updatePredictions();
   
-  // Intervalo: Recalcular predicciones cada 10 min
+  // Refrescar predicciones periódicamente
   setInterval(updatePredictions, 600000);
 });
