@@ -12,7 +12,6 @@ LON = "-78.638786"
 def weather():
     OPENWEATHER_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&APPID={OPENWEATHER_API_KEY}"
 
-
     try:
         response = requests.get(OPENWEATHER_URL)
         response.raise_for_status()  
@@ -29,3 +28,7 @@ def weather():
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Error al obtener datos del clima: {e}"}), 500      
+
+@api_routes.route('/status/')
+def status():
+    return jsonify({"status": "API is running"}), 200
