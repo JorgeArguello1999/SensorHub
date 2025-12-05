@@ -1,3 +1,13 @@
+"""
+This file was moved. Please use:
+
+- manage.py           -> application entrypoint (runs Flask app and starts background listener)
+- models/db.py        -> Firebase / Firestore initialization and client
+- routers/stream.py   -> index and SSE routes, Firestore snapshot handler and listener starter
+
+The original functionality has been preserved and translated to English.
+"""
+
 from flask import Flask, render_template, Response, stream_with_context
 import json
 import threading
