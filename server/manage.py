@@ -19,8 +19,8 @@ app.config['SECRET_KEY'] = getenv('SECRET_KEY')
 
 app.register_blueprint(home_page)
 app.register_blueprint(api_routes)
+app.register_blueprint(history_routes)
 app.register_blueprint(stream_routes)
-# app.register_blueprint(history_routes)
 
 if __name__ == '__main__':
     if db_client is None:

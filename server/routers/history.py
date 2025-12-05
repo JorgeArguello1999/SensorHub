@@ -19,21 +19,25 @@ def get_sensor_history():
 
     try:
         # 1. Obtener parámetros (default 12 horas)
-        hours_param = request.args.get('hours', default=12, type=int)
+        hours_param = request.args.get('hours', default=1, type=int)
         
-        # 2. Calcular Timestamp de corte (String)
-        # Como tus IDs son "YYYY-MM-DD HH:MM:SS", generamos un string idéntico
+        # 2. Calcular Timestamp de corte
         now = datetime.now()
         time_threshold = now - timedelta(hours=hours_param)
         cutoff_id = time_threshold.strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"🔍 Consultando historial desde: {cutoff_id}")
+        print(f"🔍 Consultando historial desde ID: {cutoff_id}")
+
+        # --- CORRECCIÓN AQUÍ ---
+        # Para filtrar por __name__, necesitamos una REFERENCIA al documento,
+        # no solo el string del ID.
+        col_ref = db_client.collection('historial_sensores')
+        cutoff_ref = col_ref.document(cutoff_id) 
 
         # 3. Consulta a Firestore
-        # Filtramos por __name__ (ID del documento) >= fecha de corte
-        # El ordenamiento por __name__ (ASC) ya nos da el orden cronológico correcto
-        docs = db_client.collection('historial_sensores')\
-            .where('__name__', '>=', cutoff_id)\
+        # Usamos la referencia 'cutoff_ref' en lugar del string 'cutoff_id'
+        docs = col_ref\
+            .where('__name__', '>=', cutoff_ref)\
             .order_by('__name__')\
             .stream()
 
@@ -43,7 +47,6 @@ def get_sensor_history():
             data = doc.to_dict()
             
             # Aplanamos la estructura para que sea fácil de graficar en JS
-            # Manejamos .get() por si algún registro antiguo no tiene todos los campos
             item = {
                 "timestamp": doc.id,
                 # Cuarto
