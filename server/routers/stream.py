@@ -4,7 +4,8 @@ import threading
 import time
 from queue import Queue
 
-from firebase_admin import firestore  # for Query.DESCENDING type
+from firebase_admin import firestore, credentials  # for Query.DESCENDING type
+import firebase_admin
 from models.db import _db as db_client
 
 stream_routes = Blueprint('stream', __name__, url_prefix='')
