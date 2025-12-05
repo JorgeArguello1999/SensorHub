@@ -1,0 +1,8 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+*.json
+# Excluye todos los JSON para no subir credenciales por error,
+# excepto los que explícitamente necesites (si alguno no es secreto).

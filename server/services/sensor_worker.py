@@ -131,3 +131,46 @@ def start_sensor_worker():
     """Inicia el worker en segundo plano."""
     t = threading.Thread(target=_worker_loop, daemon=True)
     t.start()
+
+def _worker_loop():
+    global last_save_time
+    print("🚀 Worker IoT iniciado: Escuchando sensores...")
+    
+    # Carga inicial del clima
+    datos_sensores["local"] = obtener_clima_local()
+
+    while True:
+        try:
+            messages = SSEClient(FIREBASE_RTDB_URL)
+            for msg in messages:
+                if not msg.data or msg.data == "null":
+                    continue
+                
+                try:
+                    payload = json.loads(msg.data)
+                    if "path" in payload and "data" in payload:
+                        hubo_cambio = procesar_cambio(payload["path"], payload["data"])
+
+                        if hubo_cambio:
+                            # --- BLOQUE DE SEGURIDAD ---
+                            # Envolvemos el broadcast en un try/except propio.
+                            # Si falla la web, el sensor NO debe detenerse.
+                            try:
+                                broadcast_data(datos_sensores)
+                            except Exception as e:
+                                print(f"⚠️ Error enviando a clientes web: {e}")
+                            # ---------------------------
+
+                            ahora = time.time()
+                            if (ahora - last_save_time) > (SAVE_INTERVAL_MINUTES * 60):
+                                print("⏱️ Intervalo cumplido. Guardando...")
+                                datos_sensores["local"] = obtener_clima_local()
+                                guardar_en_firestore()
+                                last_save_time = ahora
+
+                except json.JSONDecodeError:
+                    pass
+        except Exception as e:
+            # Captura general para que el hilo NUNCA muera
+            print(f"⚠️ Error crítico en Worker (reiniciando loop en 5s): {e}")
+            time.sleep(5)

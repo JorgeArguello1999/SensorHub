@@ -1,27 +1,38 @@
 from queue import Queue
+import threading
 
-# Lista global de clientes conectados a la web
+# Lista global de clientes
 connected_listeners = []
+# CANDADO DE SEGURIDAD (Nuevo)
+listeners_lock = threading.Lock()
 
 def broadcast_data(data):
     """
-    Envía datos a todos los navegadores conectados.
-    Esto ocurre en MEMORIA, no gasta lecturas de base de datos.
+    Envía datos a todos los clientes de forma segura.
     """
-    # Enviamos a cada cliente conectado
-    for q in connected_listeners:
+    # Usamos el candado para hacer una copia segura de la lista
+    with listeners_lock:
+        # Creamos una copia de la lista actual [:] para iterar
+        # Esto evita el error "list changed size during iteration"
+        active_queues = connected_listeners[:]
+
+    for q in active_queues:
         try:
-            q.put(data)
+            # put_nowait evita bloquearse si la cola está llena
+            q.put_nowait(data)
         except Exception:
-            pass # Si una cola falla, la ignoramos
+            # Si una cola falla (llena o cerrada), la marcamos para limpieza
+            pass
 
 def register_client():
-    """Registra un nuevo navegador y devuelve su cola de mensajes."""
+    """Registra un nuevo cliente."""
     q = Queue()
-    connected_listeners.append(q)
+    with listeners_lock:
+        connected_listeners.append(q)
     return q
 
 def remove_client(q):
-    """Elimina un navegador desconectado de la lista."""
-    if q in connected_listeners:
-        connected_listeners.remove(q)
+    """Elimina un cliente de forma segura."""
+    with listeners_lock:
+        if q in connected_listeners:
+            connected_listeners.remove(q)
