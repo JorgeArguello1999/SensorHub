@@ -158,6 +158,22 @@ export const updateChartRealTime = (currentDataType) => {
   }
 
   myChart.update('none'); 
+// --- AGREGAR ESTO PARA LA TABLA ---
+  const tableBody = document.getElementById('data-table-body');
+  if (tableBody) {
+      const row = `
+        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+            <td class="p-3 text-slate-400">${timeLabel}</td>
+            <td class="p-3 font-bold text-amber-500">${valLocal.toFixed(1)}°</td>
+            <td class="p-3 font-bold text-emerald-500">${valSala.toFixed(1)}°</td>
+            <td class="p-3 font-bold text-cyan-500">${valCuarto.toFixed(1)}°</td>
+            <td class="p-3"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Ok</td>
+        </tr>
+      `;
+      // Insertar al inicio y limitar a 5 filas
+      tableBody.insertAdjacentHTML('afterbegin', row);
+      if (tableBody.children.length > 5) tableBody.lastElementChild.remove();
+  }
 };
 
 /**
