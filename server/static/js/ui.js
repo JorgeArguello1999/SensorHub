@@ -297,3 +297,27 @@ export const generatePrediction = () => {
         </div>
     `;
 };
+
+/**
+ * NUEVO: Extrae los datos visibles en el gráfico para el CSV
+ */
+export const getVisibleChartData = () => {
+    if (!myChart) return [];
+
+    const labels = myChart.data.labels; // Timestamps
+    const datasetLocal = myChart.data.datasets[0].data;
+    const datasetSala = myChart.data.datasets[1].data;
+    const datasetCuarto = myChart.data.datasets[2].data;
+
+    // Mapeamos a un formato filas: [Tiempo, ValorLocal, ValorSala, ValorCuarto]
+    const rows = labels.map((label, index) => {
+        return [
+            label,
+            datasetLocal[index],
+            datasetSala[index],
+            datasetCuarto[index]
+        ];
+    });
+
+    return rows;
+};
