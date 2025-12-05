@@ -28,7 +28,3 @@ def weather():
 
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Error al obtener datos del clima: {e}"}), 500      
-
-@api_routes.route('/status/')
-def status():
-    return jsonify({"status": "API is running"}), 200
