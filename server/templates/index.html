@@ -12,11 +12,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
     
+    <!-- Scripts Firebase (Compatibilidad) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.png') }}" type="image/x-icon">
-
 </head>
 
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
@@ -103,16 +105,46 @@
                 </div>
             </div>
 
+            <!-- TARJETA DEL GRÁFICO PRINCIPAL -->
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-semibold text-white flex items-center gap-2">
-                            <div class="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></div>
-                            Comparación de Datos (Tiempo real)
-                        </h2>
-                        <button id="download-csv-button" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-cyan-300 rounded-lg text-sm transition-all flex items-center gap-2">
-                            <i data-lucide="download" class="w-4 h-4"></i> Descargar CSV
-                        </button>
+                    
+                    <!-- Cabecera con controles de modo -->
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div class="flex flex-col gap-2">
+                            <h2 class="text-xl font-semibold text-white flex items-center gap-2">
+                                <div class="w-1 h-6 bg-gradient-to-b from-cyan-500 to-blue-500 rounded-full"></div>
+                                Análisis de Datos
+                            </h2>
+                            <!-- Botones Tiempo Real vs Por Horas -->
+                            <div class="flex items-center gap-1 bg-slate-900/50 p-1 rounded-lg w-fit">
+                                <button id="mode-realtime" class="px-3 py-1 text-xs font-medium rounded-md transition-colors bg-slate-700 text-cyan-300 shadow-sm">
+                                    Tiempo Real
+                                </button>
+                                <button id="mode-history" class="px-3 py-1 text-xs font-medium rounded-md text-slate-400 hover:text-white transition-colors">
+                                    Por Horas
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 flex-wrap">
+                             <!-- INPUT DE HORAS (Oculto por defecto) -->
+                             <div id="history-controls" class="hidden flex items-center gap-2 animate-pulse-once">
+                                <label class="text-xs text-slate-400">Últimas horas:</label>
+                                <input 
+                                    type="number" 
+                                    id="history-hours-input" 
+                                    value="2" 
+                                    min="1" 
+                                    step="1"
+                                    class="w-16 bg-slate-700 text-white text-sm rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-cyan-500 border border-slate-600"
+                                >
+                            </div>
+
+                            <button id="download-csv-button" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-cyan-300 rounded-lg text-xs transition-all flex items-center gap-2">
+                                <i data-lucide="download" class="w-3 h-3"></i> CSV
+                            </button>
+                        </div>
                     </div>
 
                     <div class="flex border-b border-slate-700 mb-6">
@@ -140,6 +172,7 @@
                 </div>
             </div>
             
+            <!-- TARJETAS INFERIORES -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-slate-800/50 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">

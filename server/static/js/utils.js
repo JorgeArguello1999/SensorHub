@@ -1,5 +1,8 @@
 // utils.js
-import { historicalData } from "./config.js"; // Si decides guardar historial globalmente
+
+// ----------------------------------------------------------------------
+// FUNCIONES DE UTILIDAD (Sin dependencias externas por ahora)
+// ----------------------------------------------------------------------
 
 export const setError = (message) => {
   const el = document.getElementById("error-message");
@@ -15,17 +18,15 @@ export const generateMockHistoryForDate = () => {
   for (let h = 0; h < 24; h++) {
     data.push({
       hora: `${h.toString().padStart(2, "0")}:00`,
-      Local: 18 + Math.random() * 5,
       Sala: 19 + Math.random() * 4,
+      Local: 18 + Math.random() * 5,
       Cuarto: 20 + Math.random() * 3,
     });
   }
   return data;
 };
 
-// Modificamos el CSV para que descargue lo que tengas acumulado si lo estás guardando
-// O puedes implementar una lógica para ir guardando lo que sale del gráfico.
 export const downloadCsv = () => {
-    // Implementación simple
-    alert("Función de descarga disponible.");
+    // Aquí puedes implementar la lógica real de descarga si lo deseas más adelante
+    alert("Función de descarga preparada. (Requiere implementación de backend o array local)");
 };

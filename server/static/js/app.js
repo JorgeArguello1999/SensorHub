@@ -3,7 +3,7 @@
 import {
   loadingSpinner,
   lastUpdateSpan,
-  realtimeData, // Importante: actualizaremos esto
+  realtimeData, 
   date1Input,
   date2Input,
   compareButton,
@@ -11,81 +11,70 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
+  // Nuevos imports de config
+  modeRealtimeBtn,
+  modeHistoryBtn,
+  historyHoursInput,
 } from "./config.js";
 
-import { dataRef } from "./api.js";
-import { downloadCsv } from "./utils.js"; // Quitamos fetchOpenWeatherMapData porque ahora entra por stream
+import { dataRef, fetchHourlyHistory } from "./api.js";
+import { downloadCsv } from "./utils.js"; 
 import {
   renderCurrentStats,
   initComparisonChart,
   updateChartRealTime,
   renderHistoricalChart,
+  renderStaticChart, // Función nueva para pintar historial
   switchTab,
+  toggleModeUI,      // Función nueva para UI
   generatePrediction,
 } from "./ui.js";
 
-// ELIMINADO: import { Chart } ... para evitar el error 404.
-// Usaremos la variable global 'Chart' que carga el index_old.html
-
-// Variable de estado para saber qué estamos graficando
+// Variable de estado local para pestañas
 let activeTab = "temperatura";
+// Local mutable chart mode (avoid mutating module namespace)
+let chartMode = "realtime";
 
 // ----------------------------------------------------------------------
 // LÓGICA DE STREAMING (SSE - Server Sent Events)
-// Reemplaza a 'startChartLoop' y 'updateOpenWeatherMap'
 // ----------------------------------------------------------------------
 const setupStreamListener = () => {
   console.log("Iniciando conexión SSE...");
   
-  // Conectamos al endpoint de Flask
   const eventSource = new EventSource("/stream-data");
 
   eventSource.onmessage = (event) => {
     try {
-      // 1. Parsear datos
       const data = JSON.parse(event.data);
-      // console.log("Dato recibido:", data); // Descomentar para depurar
 
-      // 2. Actualizar Timestamp UI
+      // Actualizar Timestamp
       const timeString = data.id || new Date().toLocaleTimeString("es-EC");
       if (lastUpdateSpan) {
         lastUpdateSpan.textContent = `Última actualización: ${timeString}`;
-        loadingSpinner.classList.add("hidden"); // Ocultar spinner cuando llega data
+        loadingSpinner.classList.add("hidden"); 
       }
 
-      // 3. Mapear datos a nuestro objeto de estado global (realtimeData)
-      // Flask envía: { local: {...}, sala: {...}, cuarto: {...} }
-      
-      // -- Exterior --
+      // Mapear datos a realtimeData
       if (data.local) {
         realtimeData.local.temperatura = parseFloat(data.local.temperatura || data.local.temp || 0);
         realtimeData.local.humedad = parseFloat(data.local.humedad || data.local.hum || 0);
       }
-
-      // -- Sala --
       if (data.sala) {
         realtimeData.sala.temperatura = parseFloat(data.sala.temperatura || 0);
         realtimeData.sala.humedad = parseFloat(data.sala.humedad || 0);
       }
-
-      // -- Cuarto --
       if (data.cuarto) {
         realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura || 0);
         realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad || 0);
       }
 
-      // 4. Actualizar Textos (Tarjetas grandes)
+      // 1. Siempre actualizar Textos (Tarjetas grandes)
       renderCurrentStats();
 
-      // 5. Actualizar Gráfico en Tiempo Real
-      // Llamamos a la función de ui.js que empuja los datos al gráfico
-      updateChartRealTime(activeTab);
-
-      // Efecto visual de parpadeo (Opcional, si quieres ver que llegó el dato)
-      /*
-      document.body.classList.add('opacity-95');
-      setTimeout(() => document.body.classList.remove('opacity-95'), 100);
-      */
+      // 2. Solo actualizar gráfico si estamos en modo REALTIME
+      if (chartMode === 'realtime') {
+          updateChartRealTime(activeTab);
+      }
 
     } catch (error) {
       console.error("Error procesando evento SSE:", error);
@@ -102,19 +91,75 @@ const setupStreamListener = () => {
 };
 
 // ----------------------------------------------------------------------
+// FUNCIONES AUXILIARES
+// ----------------------------------------------------------------------
+
+// Carga datos históricos y los pinta
+const loadHistoryData = async () => {
+    const hours = parseInt(historyHoursInput.value) || 2;
+    
+    // Feedback visual simple
+    const canvas = document.getElementById("comparison-chart");
+    canvas.style.opacity = "0.5";
+
+    const data = await fetchHourlyHistory(hours);
+    
+    // renderStaticChart se encarga de limpiar y pintar
+    renderStaticChart(data, activeTab);
+    
+    canvas.style.opacity = "1";
+};
+
+// ----------------------------------------------------------------------
 // EVENTOS
 // ----------------------------------------------------------------------
 const setupEventListeners = () => {
+  
+  // 1. Cambio de Pestaña (Temperatura / Humedad)
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       activeTab = switchTab(button.dataset.tab);
+      
+      // Si estamos en historial, al cambiar de Tab (ej. de Temp a Humedad)
+      // necesitamos volver a cargar/pintar los datos históricos
+      if (chartMode === 'history') {
+          loadHistoryData();
+      }
     });
   });
 
+  // 2. Botón MODO TIEMPO REAL
+  modeRealtimeBtn.addEventListener("click", () => {
+      if(chartMode === 'realtime') return;
+      
+      chartMode = 'realtime'; // Cambiamos estado local
+      toggleModeUI('realtime');      // Cambiamos botones
+      
+      // Reiniciamos el gráfico para limpiarlo y que empiece a recibir datos del stream
+      initComparisonChart(activeTab);
+  });
+
+  // 3. Botón MODO HISTORIAL
+  modeHistoryBtn.addEventListener("click", () => {
+      if(chartMode === 'history') return;
+
+      chartMode = 'history'; // Cambiamos estado local
+      toggleModeUI('history');      // Cambiamos botones
+      
+      // Cargamos datos inmediatamente
+      loadHistoryData();
+  });
+
+  // 4. Input de Horas (Cambio de valor)
+  historyHoursInput.addEventListener("change", () => {
+      if(chartMode === 'history') {
+          loadHistoryData();
+      }
+  });
+
+  // 5. Otros botones existentes
   if(compareButton) {
     compareButton.addEventListener("click", () => {
-      // Aquí iría tu lógica histórica real
-      // Por ahora usamos mocks si no tienes backend para historial
       import("./utils.js").then(({ generateMockHistoryForDate }) => {
         const hist1 = generateMockHistoryForDate();
         const hist2 = generateMockHistoryForDate();
@@ -134,19 +179,20 @@ document.addEventListener("DOMContentLoaded", () => {
   initDOMRefs();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
-  // Inicializamos el gráfico vacío
-  initComparisonChart(activeTab);
-  
-  // INICIAMOS EL STREAMING EN LUGAR DEL BUCLE
-  setupStreamListener();
-
   // Configuración inicial de fechas
   const today = new Date().toISOString().split("T")[0];
   if(date1Input) date1Input.value = today;
   if(date2Input) date2Input.value = today;
+
+  // 1. Iniciar Gráfico
+  initComparisonChart(activeTab);
   
+  // 2. Iniciar Listeners
   setupEventListeners();
+
+  // 3. Iniciar Stream de datos (corre de fondo siempre)
+  setupStreamListener();
   
-  // Render inicial para activar estilos de tabs
+  // 4. Asegurar estado inicial de tabs
   activeTab = switchTab("temperatura");
 });

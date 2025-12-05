@@ -10,20 +10,20 @@ export const firebaseConfig = {
 // ----------------------------------------------------------------------
 // CONFIGURACIÓN API LOCAL (FLASK)
 // ----------------------------------------------------------------------
-// Apuntamos a tu servidor local
 export const OPENWEATHER_URL = "/api/weather/";
 
 // ----------------------------------------------------------------------
 // VARIABLES DE ESTADO GLOBALES
 // ----------------------------------------------------------------------
 export let realtimeData = {
-  local: { temperatura: 0, humedad: 0 }, // Inicializamos en 0 para evitar nulls en la gráfica
+  local: { temperatura: 0, humedad: 0 },
   sala: { temperatura: 0, humedad: 0 },
   cuarto: { temperatura: 0, humedad: 0 },
 };
 
-// Array para guardar la historia real
-export let historicalData = []; 
+// Estado del gráfico principal
+export let chartMode = "realtime"; // 'realtime' o 'history'
+export let historyHours = 2;       // Horas por defecto para historial
 
 export let comparisonChartInstance = null;
 export let historicalChartInstance = null;
@@ -45,6 +45,13 @@ export let humSala = null;
 export let tempCuarto = null;
 export let humCuarto = null;
 
+// Controles de Modo (Nuevos)
+export let modeRealtimeBtn = null;
+export let modeHistoryBtn = null;
+export let historyControls = null;
+export let historyHoursInput = null;
+
+// Controles Históricos (Abajo) y Predicción
 export let date1Input = null;
 export let date2Input = null;
 export let compareButton = null;
@@ -65,6 +72,12 @@ export const initDOMRefs = () => {
   humSala = document.getElementById("hum-sala");
   tempCuarto = document.getElementById("temp-cuarto");
   humCuarto = document.getElementById("hum-cuarto");
+
+  // --- NUEVAS REFERENCIAS PARA EL MODO ---
+  modeRealtimeBtn = document.getElementById("mode-realtime");
+  modeHistoryBtn = document.getElementById("mode-history");
+  historyControls = document.getElementById("history-controls");
+  historyHoursInput = document.getElementById("history-hours-input");
 
   date1Input = document.getElementById("date1-input");
   date2Input = document.getElementById("date2-input");
