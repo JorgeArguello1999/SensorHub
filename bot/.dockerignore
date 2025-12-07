@@ -1,9 +1,0 @@
-__pycache__
-*.pyc
-.venv
-.env.local
-.git
-.gitignore
-node_modules
-*.log
-.DS_Store
