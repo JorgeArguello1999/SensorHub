@@ -7,7 +7,7 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
-  // Modos y Botones
+  // Modos
   modeRealtimeBtn, 
   modeHistoryBtn,
   modeAnalyticsBtn,
@@ -31,24 +31,21 @@ import {
   renderStaticChart, 
   switchTab,
   getVisibleChartData,
-  renderAnalytics // Importamos la nueva función
+  renderAnalytics 
 } from "./ui.js";
 
-// ----------------------------------------------------------------------
 // ESTADO LOCAL
-// ----------------------------------------------------------------------
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
+// Variable para guardar los últimos datos traídos y no hacer fetch doble al cambiar tab
+let cachedHistoryData = []; 
 
-// Helper fecha
 const formatDateTimeInput = (val) => {
     if (!val) return null;
     return val.replace("T", " ") + ":00"; 
 };
 
-// ----------------------------------------------------------------------
 // PREDICCIONES
-// ----------------------------------------------------------------------
 const updatePredictions = async () => {
     const hoursForTrend = 12;
     let data = [];
@@ -97,9 +94,7 @@ const updatePredictions = async () => {
     }
 };
 
-// ----------------------------------------------------------------------
 // STREAM SSE
-// ----------------------------------------------------------------------
 const setupStreamListener = () => {
   const eventSource = new EventSource("/stream-data");
   eventSource.onmessage = (event) => {
@@ -138,21 +133,21 @@ const setupStreamListener = () => {
   };
 };
 
-// ----------------------------------------------------------------------
-// DATA LOADER (Horas)
-// ----------------------------------------------------------------------
+// CARGA DE DATOS CENTRALIZADA
 const loadHistoryData = async () => {
     const hours = parseInt(historyHoursInput.value) || 12; 
     
-    // Feedback visual
+    // UI Feedback
     if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "0.5";
     if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
 
     try {
         const data = await fetchHourlyHistory(hours);
-        
+        cachedHistoryData = data; // Guardamos en caché
+
         if (chartMode === 'analytics') {
-            renderAnalytics(data);
+            // PASAMOS activeTab PARA SABER SI ES TEMP O HUMEDAD
+            renderAnalytics(data, activeTab);
         } else if (chartMode === 'history') {
             renderStaticChart(data, activeTab);
             fillHistoryTable(data);
@@ -162,7 +157,6 @@ const loadHistoryData = async () => {
     if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
 };
 
-// Helper Tabla
 const fillHistoryTable = (data) => {
     const tableBody = document.getElementById('data-table-body');
     if (tableBody && data.length > 0) {
@@ -181,19 +175,31 @@ const fillHistoryTable = (data) => {
     }
 };
 
-// ----------------------------------------------------------------------
 // EVENTOS
-// ----------------------------------------------------------------------
 const setupEventListeners = () => {
 
-  // TABS
+  // TABS (Temperatura vs Humedad)
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.tab !== activeTab) {
         activeTab = switchTab(button.dataset.tab);
-        if (chartMode !== 'realtime') {
-             // Refrescar vista actual si es necesario
-             if(chartMode === 'history') loadHistoryData();
+        
+        // Si estamos en Analítica, actualizamos los datos con la pestaña seleccionada
+        if (chartMode === 'analytics') {
+             // Si ya tenemos datos, no hacemos fetch de nuevo, solo renderizamos
+             if (cachedHistoryData.length > 0) {
+                 renderAnalytics(cachedHistoryData, activeTab);
+             } else {
+                 loadHistoryData();
+             }
+        } 
+        // Si estamos en Historial
+        else if (chartMode === 'history') {
+             if (cachedHistoryData.length > 0) {
+                 renderStaticChart(cachedHistoryData, activeTab);
+             } else {
+                 loadHistoryData();
+             }
         }
       }
     });
@@ -203,13 +209,10 @@ const setupEventListeners = () => {
   if (modeRealtimeBtn) {
     modeRealtimeBtn.addEventListener("click", () => {
         chartMode = 'realtime';
-        
-        // Estilos
         modeRealtimeBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         
-        // Vistas
         document.getElementById("history-controls").classList.add("hidden");
         chartContainer.classList.remove("hidden");
         analyticsPanel.classList.add("hidden");
@@ -224,7 +227,6 @@ const setupEventListeners = () => {
   if (modeHistoryBtn) {
     modeHistoryBtn.addEventListener("click", () => {
         chartMode = 'history';
-
         modeHistoryBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
@@ -238,22 +240,19 @@ const setupEventListeners = () => {
     });
   }
 
-  // MODO: ANALÍTICA (NUEVO)
+  // MODO: ANALÍTICA
   if (modeAnalyticsBtn) {
       modeAnalyticsBtn.addEventListener("click", () => {
           chartMode = 'analytics';
-
-          // Estilo especial (Indigo)
           modeAnalyticsBtn.className = "mode-tab-analytics px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20";
           modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
           modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
 
-          // Mostrar controles fecha, Ocultar gráfico, Mostrar Panel
           document.getElementById("history-controls").classList.remove("hidden");
           chartContainer.classList.add("hidden");
           analyticsPanel.classList.remove("hidden");
 
-          loadHistoryData(); // Carga por defecto las horas del input
+          loadHistoryData();
       });
   }
 
@@ -271,14 +270,14 @@ const setupEventListeners = () => {
           const startFmt = formatDateTimeInput(startVal);
           const endFmt = formatDateTimeInput(endVal);
           
-          // UI Feedback
           if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "0.5";
           if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
 
           const data = await fetchRangeHistory(startFmt, endFmt);
+          cachedHistoryData = data; 
           
           if (chartMode === 'analytics') {
-              renderAnalytics(data);
+              renderAnalytics(data, activeTab);
           } else {
               renderStaticChart(data, activeTab);
               fillHistoryTable(data);
@@ -292,7 +291,6 @@ const setupEventListeners = () => {
   if(downloadCsvButton) {
     downloadCsvButton.addEventListener("click", async () => {
         if (chartMode === 'history' || chartMode === 'analytics') {
-             // Prioridad a Rango si hay fechas
              if (historyStartInput.value && historyEndInput.value) {
                  const s = formatDateTimeInput(historyStartInput.value);
                  const e = formatDateTimeInput(historyEndInput.value);

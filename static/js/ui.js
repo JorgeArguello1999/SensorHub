@@ -16,11 +16,11 @@ import {
 } from "./config.js";
 
 // Variables para instancias de gráficos
-let myChart = null;           // Gráfico de líneas (Vivo/Historial)
-let analyticsChart = null;    // NUEVO: Gráfico de barras (Analítica)
+let myChart = null;           
+let analyticsChart = null;    
 
 /**
- * Actualiza las tarjetas de estadísticas (Texto grande).
+ * Actualiza las tarjetas de estadísticas (Texto grande, panel superior).
  */
 export const renderCurrentStats = () => {
   const localTemp = realtimeData.local.temperatura;
@@ -193,39 +193,48 @@ export const getVisibleChartData = () => {
 
 /**
  * =========================================================================
- * NUEVA LÓGICA DE ANALÍTICA AVANZADA
+ * LÓGICA DE ANALÍTICA (SOPORTA TEMP Y HUMEDAD)
  * =========================================================================
  */
 
-// Helper para Desviación Estándar (Mide estabilidad)
 const calculateStdDev = (arr, mean) => {
     if(arr.length === 0) return 0;
     return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
 };
 
-export const renderAnalytics = (data) => {
+// AHORA RECIBE dataType ('temperatura' o 'humedad')
+export const renderAnalytics = (data, dataType = 'temperatura') => {
+    
     if (!data || data.length === 0) {
         document.getElementById("stat-total-samples").textContent = "0";
         document.getElementById("outages-list").innerHTML = '<li class="text-xs text-slate-500 italic p-2">Sin datos para analizar.</li>';
         return;
     }
 
-    // 1. Inicialización de contadores
+    // 1. Configuración Dinámica según Tipo
+    const isTemp = dataType === 'temperatura';
+    const unit = isTemp ? "°" : "%";
+    // Sufijos de las llaves en el objeto data (ej: sala_temp vs sala_hum)
+    const suffix = isTemp ? "_temp" : "_hum"; 
+
+    // 2. Inicialización
     let salaVals = [], cuartoVals = [], localVals = [];
     let outages = [];
     let previousTime = null;
-    
-    // --- CAMBIO: UMBRAL A 20 MINUTOS ---
     const GAP_THRESHOLD_MS = 20 * 60 * 1000; 
 
-    // 2. Procesamiento de datos (O(n))
+    // 3. Procesamiento
     data.forEach(d => {
-        // Recolección de valores válidos para estadística
-        if (d.sala_temp !== null) salaVals.push(d.sala_temp);
-        if (d.cuarto_temp !== null) cuartoVals.push(d.cuarto_temp);
-        if (d.local_temp !== null) localVals.push(d.local_temp);
+        // Acceso dinámico a propiedades: d['sala_temp'] o d['sala_hum']
+        const valSala = d[`sala${suffix}`];
+        const valCuarto = d[`cuarto${suffix}`];
+        const valLocal = d[`local${suffix}`];
 
-        // Detección de Cortes
+        if (valSala !== null) salaVals.push(valSala);
+        if (valCuarto !== null) cuartoVals.push(valCuarto);
+        if (valLocal !== null) localVals.push(valLocal);
+
+        // Detección de Cortes (Independiente del tipo de dato, usa Timestamp)
         const safeDateStr = d.timestamp.replace(" ", "T");
         const currentTime = new Date(safeDateStr).getTime();
         
@@ -246,7 +255,7 @@ export const renderAnalytics = (data) => {
 
     const total = data.length;
 
-    // 3. Cálculos Estadísticos
+    // 4. Estadísticas
     const getStats = (arr) => {
         if (arr.length === 0) return { min: 0, max: 0, avg: 0, std: 0 };
         const min = Math.min(...arr);
@@ -261,48 +270,49 @@ export const renderAnalytics = (data) => {
     const cStats = getStats(cuartoVals);
     const lStats = getStats(localVals);
 
-    // 4. Renderizado de Tarjetas Superiores (KPIs)
+    // 5. Renderizado KPIs
     document.getElementById("stat-total-samples").textContent = total;
-    document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; // Mock formula simple
+    // Uptime simplificado
+    document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; 
     document.getElementById("stat-outages-count").textContent = outages.length;
     
-    // Renderizar Promedios Individuales
-    document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + "°";
-    document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + "°";
-    document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + "°";
+    // Promedios con UNIDAD dinámica
+    document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + unit;
+    document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + unit;
+    document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + unit;
 
-    // 5. Renderizado de "Tabla de Estabilidad" (Enriquecida)
+    // 6. Tabla Detallada
     const tbody = document.getElementById("stats-minmax-body");
     tbody.innerHTML = `
         <tr class="border-b border-white/5 hover:bg-white/5">
             <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div>Sala</td>
-            <td class="text-right font-mono text-slate-300">${sStats.min.toFixed(1)}°</td>
-            <td class="text-right font-mono text-slate-300">${sStats.max.toFixed(1)}°</td>
-            <td class="text-right font-mono text-emerald-400 font-bold">${sStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${sStats.min.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-slate-300">${sStats.max.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-emerald-400 font-bold">${sStats.avg.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-xs text-slate-500">±${sStats.std.toFixed(2)}</td>
         </tr>
         <tr class="border-b border-white/5 hover:bg-white/5">
             <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500"></div>Cuarto</td>
-            <td class="text-right font-mono text-slate-300">${cStats.min.toFixed(1)}°</td>
-            <td class="text-right font-mono text-slate-300">${cStats.max.toFixed(1)}°</td>
-            <td class="text-right font-mono text-cyan-400 font-bold">${cStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${cStats.min.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-slate-300">${cStats.max.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-cyan-400 font-bold">${cStats.avg.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-xs text-slate-500">±${cStats.std.toFixed(2)}</td>
         </tr>
         <tr class="hover:bg-white/5">
             <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-amber-500"></div>Exterior</td>
-            <td class="text-right font-mono text-slate-300">${lStats.min.toFixed(1)}°</td>
-            <td class="text-right font-mono text-slate-300">${lStats.max.toFixed(1)}°</td>
-            <td class="text-right font-mono text-amber-400 font-bold">${lStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${lStats.min.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-slate-300">${lStats.max.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-amber-400 font-bold">${lStats.avg.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-xs text-slate-500">±${lStats.std.toFixed(2)}</td>
         </tr>
     `;
 
-    // 6. Lista de Cortes
+    // 7. Lista Cortes
     const list = document.getElementById("outages-list");
     if (outages.length === 0) {
         list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">
             <i data-lucide="check-circle" class="w-4 h-4 mx-auto mb-1"></i>
-            Conexión Estable (Sin cortes > 20min)
+            Conexión Estable
         </li>`;
     } else {
         list.innerHTML = outages.map(o => `
@@ -318,15 +328,14 @@ export const renderAnalytics = (data) => {
         `).join('');
     }
     
-    // Si lucide existe en el scope global, refrescar iconos insertados
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // 7. GRÁFICO DE BARRAS (Nuevo)
-    renderAnalyticsBarChart(sStats, cStats, lStats);
+    // 8. Gráfico de Barras con Etiqueta Correcta
+    renderAnalyticsBarChart(sStats, cStats, lStats, isTemp ? "Temperatura" : "Humedad");
 };
 
-// Función para el gráfico de barras comparativo (Visual)
-const renderAnalyticsBarChart = (s, c, l) => {
+// Gráfico de Barras Comparativo
+const renderAnalyticsBarChart = (s, c, l, labelType) => {
     const ctx = document.getElementById("analytics-chart").getContext("2d");
     
     if (analyticsChart) analyticsChart.destroy();
@@ -337,21 +346,21 @@ const renderAnalyticsBarChart = (s, c, l) => {
             labels: ['Sala', 'Cuarto', 'Exterior'],
             datasets: [
                 {
-                    label: 'Mínima',
+                    label: 'Mín',
                     data: [s.min, c.min, l.min],
-                    backgroundColor: '#94a3b8', // Slate 400
+                    backgroundColor: '#94a3b8',
                     borderRadius: 4,
                 },
                 {
-                    label: 'Promedio',
+                    label: 'Prom',
                     data: [s.avg, c.avg, l.avg],
-                    backgroundColor: ['#10b981', '#06b6d4', '#fbbf24'], // Colores temáticos
+                    backgroundColor: ['#10b981', '#06b6d4', '#fbbf24'],
                     borderRadius: 4,
                 },
                 {
-                    label: 'Máxima',
+                    label: 'Máx',
                     data: [s.max, c.max, l.max],
-                    backgroundColor: '#cbd5e1', // Slate 300
+                    backgroundColor: '#cbd5e1',
                     borderRadius: 4,
                 }
             ]
@@ -361,7 +370,13 @@ const renderAnalyticsBarChart = (s, c, l) => {
             maintainAspectRatio: false,
             plugins: {
                 legend: { position: 'top', labels: { color: '#cbd5e1', font: {size: 10} } },
-                title: { display: false }
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y + (labelType === "Temperatura" ? "°C" : "%");
+                        }
+                    }
+                }
             },
             scales: {
                 y: { 
