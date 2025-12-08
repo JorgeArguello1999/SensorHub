@@ -7,10 +7,15 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
+  // Modos y Botones
   modeRealtimeBtn, 
-  modeHistoryBtn,  
+  modeHistoryBtn,
+  modeAnalyticsBtn,
+  // Paneles
+  chartContainer,
+  analyticsPanel,
+  // Inputs
   historyHoursInput,
-  // Nuevas importaciones
   historyStartInput,
   historyEndInput,
   rangeSearchBtn,
@@ -26,6 +31,7 @@ import {
   renderStaticChart, 
   switchTab,
   getVisibleChartData,
+  renderAnalytics // Importamos la nueva función
 } from "./ui.js";
 
 // ----------------------------------------------------------------------
@@ -34,23 +40,19 @@ import {
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
 
-// Helper para formatear fecha de input (YYYY-MM-DDTHH:MM) a DB (YYYY-MM-DD HH:MM:SS)
+// Helper fecha
 const formatDateTimeInput = (val) => {
     if (!val) return null;
     return val.replace("T", " ") + ":00"; 
 };
 
 // ----------------------------------------------------------------------
-// PREDICCIONES (IA)
+// PREDICCIONES
 // ----------------------------------------------------------------------
 const updatePredictions = async () => {
     const hoursForTrend = 12;
     let data = [];
-    
-    try {
-        data = await fetchHourlyHistory(hoursForTrend);
-    } catch (e) { console.error(e); return; }
-
+    try { data = await fetchHourlyHistory(hoursForTrend); } catch (e) { console.error(e); return; }
     if (!data || data.length < 2) return;
 
     const modelSala = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.sala_temp) })));
@@ -78,7 +80,6 @@ const updatePredictions = async () => {
             </div>
         `;
     };
-
     render('pred-morning', morning);
     render('pred-afternoon', afternoon);
     render('pred-night', night);
@@ -90,7 +91,6 @@ const updatePredictions = async () => {
             if (!timeInput) return;
             const [h, m] = timeInput.split(':');
             const t = new Date(); t.setHours(h, m, 0);
-            
             document.getElementById('custom-prediction-result').classList.remove('hidden');
             document.getElementById('custom-pred-value').innerText = `${modelSala.predict(t).toFixed(1)}°C`;
         };
@@ -102,7 +102,6 @@ const updatePredictions = async () => {
 // ----------------------------------------------------------------------
 const setupStreamListener = () => {
   const eventSource = new EventSource("/stream-data");
-
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
@@ -112,7 +111,6 @@ const setupStreamListener = () => {
         lastUpdateSpan.textContent = `Actualizado: ${timeString}`;
         loadingSpinner.classList.add("hidden"); 
       }
-
       if (data.local) { realtimeData.local.temperatura = parseFloat(data.local.temperatura||0); realtimeData.local.humedad = parseFloat(data.local.humedad||0); }
       if (data.sala) { realtimeData.sala.temperatura = parseFloat(data.sala.temperatura||0); realtimeData.sala.humedad = parseFloat(data.sala.humedad||0); }
       if (data.cuarto) { realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura||0); realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad||0); }
@@ -121,7 +119,6 @@ const setupStreamListener = () => {
 
       if (chartMode === 'realtime') {
           updateChartRealTime(activeTab);
-          
           const tableBody = document.getElementById('data-table-body');
           if (tableBody) {
               const row = `
@@ -142,170 +139,169 @@ const setupStreamListener = () => {
 };
 
 // ----------------------------------------------------------------------
-// CARGAR HISTORIAL (POR HORAS)
+// DATA LOADER (Horas)
 // ----------------------------------------------------------------------
 const loadHistoryData = async () => {
     const hours = parseInt(historyHoursInput.value) || 12; 
-    const canvas = document.getElementById("comparison-chart");
     
-    if(canvas) canvas.style.opacity = "0.5";
-    
-    if (chartMode === 'history') {
+    // Feedback visual
+    if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "0.5";
+    if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
+
+    try {
         const data = await fetchHourlyHistory(hours);
-        renderStaticChart(data, activeTab);
         
-        const tableBody = document.getElementById('data-table-body');
-        if (tableBody && data.length > 0) {
-            tableBody.innerHTML = ""; 
-            data.slice(0, 10).forEach(row => { 
-                 const tr = `
-                    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                        <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
-                        <td class="p-3 font-bold text-amber-500">${row.local_temp}°</td>
-                        <td class="p-3 font-bold text-emerald-500">${row.sala_temp}°</td>
-                        <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp}°</td>
-                        <td class="p-3"><span class="text-xs text-slate-500">Histórico</span></td>
-                    </tr>`;
-                 tableBody.insertAdjacentHTML('beforeend', tr);
-            });
+        if (chartMode === 'analytics') {
+            renderAnalytics(data);
+        } else if (chartMode === 'history') {
+            renderStaticChart(data, activeTab);
+            fillHistoryTable(data);
         }
+    } catch (e) { console.error(e); }
+
+    if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
+};
+
+// Helper Tabla
+const fillHistoryTable = (data) => {
+    const tableBody = document.getElementById('data-table-body');
+    if (tableBody && data.length > 0) {
+        tableBody.innerHTML = ""; 
+        data.slice(0, 10).forEach(row => { 
+             const tr = `
+                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
+                    <td class="p-3 font-bold text-amber-500">${row.local_temp}°</td>
+                    <td class="p-3 font-bold text-emerald-500">${row.sala_temp}°</td>
+                    <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp}°</td>
+                    <td class="p-3"><span class="text-xs text-slate-500">Histórico</span></td>
+                </tr>`;
+             tableBody.insertAdjacentHTML('beforeend', tr);
+        });
     }
-    
-    if(canvas) canvas.style.opacity = "1";
 };
 
 // ----------------------------------------------------------------------
-// SETUP PRINCIPAL
+// EVENTOS
 // ----------------------------------------------------------------------
 const setupEventListeners = () => {
 
-  // 1. TABS TEMP / HUMEDAD
+  // TABS
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.tab !== activeTab) {
         activeTab = switchTab(button.dataset.tab);
-        // Si estamos en historia, recargar el gráfico con los mismos datos
-        // Nota: Idealmente deberíamos guardar los datos en memoria para no refetchear,
-        // pero para simplificar, llamamos a loadHistoryData de nuevo si es modo horas
-        if (chartMode === 'history') {
-            // Un pequeño truco: si tenemos input de rango lleno, usamos ese botón, si no, loadHistoryData
-            if(historyStartInput && historyStartInput.value && historyEndInput && historyEndInput.value) {
-                rangeSearchBtn.click();
-            } else {
-                loadHistoryData();
-            }
+        if (chartMode !== 'realtime') {
+             // Refrescar vista actual si es necesario
+             if(chartMode === 'history') loadHistoryData();
         }
       }
     });
   });
 
-  // 2. CAMBIO DE MODO: EN VIVO
+  // MODO: LIVE
   if (modeRealtimeBtn) {
     modeRealtimeBtn.addEventListener("click", () => {
         chartMode = 'realtime';
         
+        // Estilos
         modeRealtimeBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+        modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         
+        // Vistas
         document.getElementById("history-controls").classList.add("hidden");
-        initComparisonChart(activeTab);
+        chartContainer.classList.remove("hidden");
+        analyticsPanel.classList.add("hidden");
         
+        initComparisonChart(activeTab);
         const tableBody = document.getElementById('data-table-body');
         if(tableBody) tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic" colspan="5">Modo En Vivo: Esperando datos...</td></tr>`;
     });
   }
 
-  // 3. CAMBIO DE MODO: HISTORIAL
+  // MODO: HISTORIAL
   if (modeHistoryBtn) {
     modeHistoryBtn.addEventListener("click", () => {
         chartMode = 'history';
 
         modeHistoryBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+        modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
 
-        const controls = document.getElementById("history-controls");
-        controls.classList.remove("hidden");
+        document.getElementById("history-controls").classList.remove("hidden");
+        chartContainer.classList.remove("hidden");
+        analyticsPanel.classList.add("hidden");
+
         historyHoursInput.value = "12"; 
-
         loadHistoryData();
     });
   }
 
-  // 4. BOTÓN "BUSCAR" (HORAS)
-  const btnSearch = document.getElementById('mode-history-search');
-  if(btnSearch) {
-      btnSearch.addEventListener('click', () => {
-          loadHistoryData(); 
-      });
-  }
-  
-  // 5. ENTER EN EL INPUT HORAS
-  if(historyHoursInput) {
-      historyHoursInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') loadHistoryData();
+  // MODO: ANALÍTICA (NUEVO)
+  if (modeAnalyticsBtn) {
+      modeAnalyticsBtn.addEventListener("click", () => {
+          chartMode = 'analytics';
+
+          // Estilo especial (Indigo)
+          modeAnalyticsBtn.className = "mode-tab-analytics px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20";
+          modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+          modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+
+          // Mostrar controles fecha, Ocultar gráfico, Mostrar Panel
+          document.getElementById("history-controls").classList.remove("hidden");
+          chartContainer.classList.add("hidden");
+          analyticsPanel.classList.remove("hidden");
+
+          loadHistoryData(); // Carga por defecto las horas del input
       });
   }
 
-  // 6. BOTÓN BÚSQUEDA POR RANGO (NUEVO)
+  // BOTÓN BUSCAR HORAS
+  const btnSearch = document.getElementById('mode-history-search');
+  if(btnSearch) btnSearch.addEventListener('click', loadHistoryData);
+
+  // BOTÓN BUSCAR RANGO
   if (rangeSearchBtn) {
       rangeSearchBtn.addEventListener("click", async () => {
           const startVal = historyStartInput.value;
           const endVal = historyEndInput.value;
-
-          if (!startVal || !endVal) {
-              alert("Por favor selecciona ambas fechas (Desde y Hasta)");
-              return;
-          }
-
-          const canvas = document.getElementById("comparison-chart");
-          if(canvas) canvas.style.opacity = "0.5";
+          if (!startVal || !endVal) { alert("Selecciona fechas"); return; }
 
           const startFmt = formatDateTimeInput(startVal);
           const endFmt = formatDateTimeInput(endVal);
+          
+          // UI Feedback
+          if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "0.5";
+          if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
 
           const data = await fetchRangeHistory(startFmt, endFmt);
           
-          renderStaticChart(data, activeTab);
-          
-          // Actualizar tabla con resultados de rango
-          const tableBody = document.getElementById('data-table-body');
-          if (tableBody) {
-              tableBody.innerHTML = ""; 
-              if (data.length === 0) {
-                   tableBody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-500">No hay datos en este rango.</td></tr>`;
-              } else {
-                  data.slice(0, 15).forEach(row => { 
-                       const tr = `
-                          <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                              <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp}</td>
-                              <td class="p-3 font-bold text-amber-500">${row.local_temp ? row.local_temp.toFixed(1) : '--'}°</td>
-                              <td class="p-3 font-bold text-emerald-500">${row.sala_temp ? row.sala_temp.toFixed(1) : '--'}°</td>
-                              <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp ? row.cuarto_temp.toFixed(1) : '--'}°</td>
-                              <td class="p-3"><span class="text-xs text-cyan-400">Rango</span></td>
-                          </tr>`;
-                       tableBody.insertAdjacentHTML('beforeend', tr);
-                  });
-              }
+          if (chartMode === 'analytics') {
+              renderAnalytics(data);
+          } else {
+              renderStaticChart(data, activeTab);
+              fillHistoryTable(data);
           }
 
-          if(canvas) canvas.style.opacity = "1";
+          if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
       });
   }
 
-  // 7. CSV DOWNLOAD
+  // CSV
   if(downloadCsvButton) {
     downloadCsvButton.addEventListener("click", async () => {
-        if (chartMode === 'history') {
-             // Si hay fechas en los inputs de rango, priorizamos descargar ese rango
+        if (chartMode === 'history' || chartMode === 'analytics') {
+             // Prioridad a Rango si hay fechas
              if (historyStartInput.value && historyEndInput.value) {
                  const s = formatDateTimeInput(historyStartInput.value);
                  const e = formatDateTimeInput(historyEndInput.value);
                  const data = await fetchRangeHistory(s, e);
-                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial_rango.csv");
+                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "reporte_rango.csv");
              } else {
                  const h = historyHoursInput.value || 12;
                  const data = await fetchHourlyHistory(h);
-                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial.csv");
+                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "reporte_horas.csv");
              }
         } else {
              const rows = getVisibleChartData();

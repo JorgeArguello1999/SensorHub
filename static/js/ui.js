@@ -10,13 +10,14 @@ import {
   tabButtons,
   modeRealtimeBtn,
   modeHistoryBtn,
+  modeAnalyticsBtn,
   historyControls,
   chartMode
 } from "./config.js";
 
-// Variable local para mantener la instancia del gráfico
-let myChart = null;
-let historicalChartInstance = null; // Instancia para el gráfico de abajo (comparación fechas)
+// Variables para instancias de gráficos
+let myChart = null;           // Gráfico de líneas (Vivo/Historial)
+let analyticsChart = null;    // NUEVO: Gráfico de barras (Analítica)
 
 /**
  * Actualiza las tarjetas de estadísticas (Texto grande).
@@ -25,26 +26,22 @@ export const renderCurrentStats = () => {
   const localTemp = realtimeData.local.temperatura;
   const localHum = realtimeData.local.humedad;
 
-  // Actualizar tarjetas
   if (tempLocal) tempLocal.textContent = localTemp !== null ? `${localTemp.toFixed(1)}°` : "--°";
-  if (humLocal) humLocal.textContent = localHum !== null ? `Humedad: ${localHum.toFixed(1)}%` : "Humedad: --%";
+  if (humLocal) humLocal.textContent = localHum !== null ? `H: ${localHum.toFixed(1)}%` : "H: --%";
   
   if (tempSala) tempSala.textContent = `${realtimeData.sala.temperatura.toFixed(1)}°`;
-  if (humSala) humSala.textContent = `Humedad: ${realtimeData.sala.humedad.toFixed(1)}%`;
+  if (humSala) humSala.textContent = `H: ${realtimeData.sala.humedad.toFixed(1)}%`;
   
   if (tempCuarto) tempCuarto.textContent = `${realtimeData.cuarto.temperatura.toFixed(1)}°`;
-  if (humCuarto) humCuarto.textContent = `Humedad: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
+  if (humCuarto) humCuarto.textContent = `H: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
 };
 
 /**
- * INICIALIZA el gráfico vacío (Se llama una vez o al cambiar de pestaña).
+ * INICIALIZA el gráfico de líneas (Vivo/Historial)
  */
 export const initComparisonChart = (dataType) => {
   const ctx = document.getElementById("comparison-chart").getContext("2d");
-  
-  if (myChart) {
-    myChart.destroy();
-  }
+  if (myChart) myChart.destroy();
 
   const isTemperature = dataType === "temperatura";
   const unit = isTemperature ? "°C" : "%";
@@ -87,46 +84,29 @@ export const initComparisonChart = (dataType) => {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: {
-        duration: 0 
-      },
-      interaction: {
-        mode: 'index',
-        intersect: false,
-      },
+      animation: { duration: 0 },
+      interaction: { mode: 'index', intersect: false },
       scales: {
-        x: { 
-            grid: { color: "#3341554d" }, 
-            ticks: { color: "#94a3b8", maxRotation: 0, autoSkip: true } 
-        },
+        x: { grid: { color: "#3341554d" }, ticks: { color: "#94a3b8", maxRotation: 0, autoSkip: true } },
         y: {
           beginAtZero: false,
           grid: { color: "#3341554d" },
-          ticks: {
-            color: "#94a3b8",
-            callback: function (value) {
-              return value.toFixed(1) + unit;
-            },
-          },
+          ticks: { color: "#94a3b8", callback: (val) => val.toFixed(1) + unit },
         },
       },
       plugins: { 
           legend: { labels: { color: "#94a3b8" } },
-          tooltip: {
-              mode: 'index',
-              intersect: false
-          }
+          tooltip: { mode: 'index', intersect: false }
       },
     },
   });
 };
 
 /**
- * ACTUALIZA el gráfico en tiempo real (Push & Shift).
+ * ACTUALIZA el gráfico en tiempo real
  */
 export const updateChartRealTime = (currentDataType) => {
-  // GUARDIA: Si estamos en modo historia, NO actualizamos con datos del stream
-  if (!myChart || chartMode === 'history') return;
+  if (!myChart || chartMode !== 'realtime') return;
 
   const now = new Date();
   const timeLabel = now.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -149,55 +129,26 @@ export const updateChartRealTime = (currentDataType) => {
   myChart.data.datasets[1].data.push(valSala);
   myChart.data.datasets[2].data.push(valCuarto);
 
-  const MAX_POINTS = 20;
-  if (myChart.data.labels.length > MAX_POINTS) {
+  if (myChart.data.labels.length > 20) {
     myChart.data.labels.shift();
-    myChart.data.datasets.forEach((dataset) => {
-      dataset.data.shift();
-    });
+    myChart.data.datasets.forEach((dataset) => dataset.data.shift());
   }
-
   myChart.update('none'); 
-// --- AGREGAR ESTO PARA LA TABLA ---
-  const tableBody = document.getElementById('data-table-body');
-  if (tableBody) {
-      const row = `
-        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-            <td class="p-3 text-slate-400">${timeLabel}</td>
-            <td class="p-3 font-bold text-amber-500">${valLocal.toFixed(1)}°</td>
-            <td class="p-3 font-bold text-emerald-500">${valSala.toFixed(1)}°</td>
-            <td class="p-3 font-bold text-cyan-500">${valCuarto.toFixed(1)}°</td>
-            <td class="p-3"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Ok</td>
-        </tr>
-      `;
-      // Insertar al inicio y limitar a 5 filas
-      tableBody.insertAdjacentHTML('afterbegin', row);
-      if (tableBody.children.length > 5) tableBody.lastElementChild.remove();
-  }
 };
 
 /**
- * NUEVO: PINTA EL HISTORIAL (Modo Por Horas).
- * Reemplaza todos los datos del gráfico con el array recibido de Flask.
+ * PINTA EL HISTORIAL (Gráfico Estático)
  */
 export const renderStaticChart = (dataArray, currentDataType) => {
     if (!myChart) return;
 
-    // dataArray es el array "data" que viene de tu JSON
-    // { "cuarto_temp": 14.8, "timestamp": "2025-12-05 02:49:13", ... }
-
-    // 1. Extraemos etiquetas (Horas)
     const labels = dataArray.map(item => {
-        // item.timestamp viene como "YYYY-MM-DD HH:MM:SS"
         const parts = item.timestamp.split(' ');
-        const timePart = parts.length > 1 ? parts[1] : item.timestamp;
-        // Cortamos para mostrar HH:MM
-        return timePart.substring(0, 5); 
+        return parts.length > 1 ? parts[1].substring(0, 5) : item.timestamp; 
     });
 
     let dLocal, dSala, dCuarto;
 
-    // 2. Extraemos valores según la pestaña activa
     if (currentDataType === "temperatura") {
         dLocal = dataArray.map(i => i.local_temp);
         dSala = dataArray.map(i => i.sala_temp);
@@ -208,20 +159,15 @@ export const renderStaticChart = (dataArray, currentDataType) => {
         dCuarto = dataArray.map(i => i.cuarto_hum);
     }
 
-    // 3. Actualizamos el gráfico completo
     myChart.data.labels = labels;
     myChart.data.datasets[0].data = dLocal;
     myChart.data.datasets[1].data = dSala;
     myChart.data.datasets[2].data = dCuarto;
-
-    // Reactivamos animación suave al cargar el historial
     myChart.options.animation.duration = 1000; 
-    
     myChart.update();
 };
 
 export const switchTab = (dataType) => {
-  // 1. Estilos de botones (Temp vs Hum)
   tabButtons.forEach((button) => {
     if (button.dataset.tab === dataType) {
       button.classList.add("border-cyan-500", "text-cyan-400");
@@ -231,109 +177,203 @@ export const switchTab = (dataType) => {
       button.classList.add("border-transparent", "text-slate-400");
     }
   });
-
-  // 2. Reiniciamos gráfico. 
-  // Nota: La lógica de si cargar historial o realtime se maneja en app.js
   initComparisonChart(dataType);
-
   return dataType; 
 };
 
+export const getVisibleChartData = () => {
+    if (!myChart) return [];
+    const labels = myChart.data.labels;
+    const datasetLocal = myChart.data.datasets[0].data;
+    const datasetSala = myChart.data.datasets[1].data;
+    const datasetCuarto = myChart.data.datasets[2].data;
+
+    return labels.map((label, index) => [label, datasetLocal[index], datasetSala[index], datasetCuarto[index]]);
+};
+
 /**
- * NUEVO: Alterna visualmente los botones de modo.
+ * =========================================================================
+ * NUEVA LÓGICA DE ANALÍTICA AVANZADA
+ * =========================================================================
  */
-export const toggleModeUI = (mode) => {
-    if(mode === 'realtime'){
-        modeRealtimeBtn.classList.add('bg-slate-700', 'text-cyan-300');
-        modeRealtimeBtn.classList.remove('text-slate-400', 'hover:text-white');
-        
-        modeHistoryBtn.classList.remove('bg-slate-700', 'text-cyan-300');
-        modeHistoryBtn.classList.add('text-slate-400', 'hover:text-white');
 
-        historyControls.classList.add('hidden');
-    } else {
-        modeHistoryBtn.classList.add('bg-slate-700', 'text-cyan-300');
-        modeHistoryBtn.classList.remove('text-slate-400', 'hover:text-white');
-        
-        modeRealtimeBtn.classList.remove('bg-slate-700', 'text-cyan-300');
-        modeRealtimeBtn.classList.add('text-slate-400', 'hover:text-white');
+// Helper para Desviación Estándar (Mide estabilidad)
+const calculateStdDev = (arr, mean) => {
+    if(arr.length === 0) return 0;
+    return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
+};
 
-        historyControls.classList.remove('hidden');
+export const renderAnalytics = (data) => {
+    if (!data || data.length === 0) {
+        document.getElementById("stat-total-samples").textContent = "0";
+        document.getElementById("outages-list").innerHTML = '<li class="text-xs text-slate-500 italic p-2">Sin datos para analizar.</li>';
+        return;
     }
-}
 
-// ... Funciones existentes que no cambian (mocks para el gráfico de abajo) ...
-export const renderHistoricalChart = (data1, data2, label1, label2) => {
-    // Código para el gráfico de comparación por fechas (inferior)
-    const ctx = document.getElementById("historical-chart").getContext("2d");
-    if (historicalChartInstance) historicalChartInstance.destroy();
+    // 1. Inicialización de contadores
+    let salaVals = [], cuartoVals = [], localVals = [];
+    let outages = [];
+    let previousTime = null;
     
-    historicalChartInstance = new Chart(ctx, {
-        type: "line",
+    // --- CAMBIO: UMBRAL A 20 MINUTOS ---
+    const GAP_THRESHOLD_MS = 20 * 60 * 1000; 
+
+    // 2. Procesamiento de datos (O(n))
+    data.forEach(d => {
+        // Recolección de valores válidos para estadística
+        if (d.sala_temp !== null) salaVals.push(d.sala_temp);
+        if (d.cuarto_temp !== null) cuartoVals.push(d.cuarto_temp);
+        if (d.local_temp !== null) localVals.push(d.local_temp);
+
+        // Detección de Cortes
+        const safeDateStr = d.timestamp.replace(" ", "T");
+        const currentTime = new Date(safeDateStr).getTime();
+        
+        if (previousTime) {
+            const diff = currentTime - previousTime;
+            if (diff > GAP_THRESHOLD_MS) {
+                const durationMinutes = Math.floor(diff / 60000);
+                outages.push({
+                    date: d.timestamp.split(' ')[0],
+                    from: new Date(previousTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    to: new Date(currentTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                    duration: durationMinutes
+                });
+            }
+        }
+        previousTime = currentTime;
+    });
+
+    const total = data.length;
+
+    // 3. Cálculos Estadísticos
+    const getStats = (arr) => {
+        if (arr.length === 0) return { min: 0, max: 0, avg: 0, std: 0 };
+        const min = Math.min(...arr);
+        const max = Math.max(...arr);
+        const sum = arr.reduce((a, b) => a + b, 0);
+        const avg = sum / arr.length;
+        const std = calculateStdDev(arr, avg);
+        return { min, max, avg, std };
+    };
+
+    const sStats = getStats(salaVals);
+    const cStats = getStats(cuartoVals);
+    const lStats = getStats(localVals);
+
+    // 4. Renderizado de Tarjetas Superiores (KPIs)
+    document.getElementById("stat-total-samples").textContent = total;
+    document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; // Mock formula simple
+    document.getElementById("stat-outages-count").textContent = outages.length;
+    
+    // Renderizar Promedios Individuales
+    document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + "°";
+    document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + "°";
+    document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + "°";
+
+    // 5. Renderizado de "Tabla de Estabilidad" (Enriquecida)
+    const tbody = document.getElementById("stats-minmax-body");
+    tbody.innerHTML = `
+        <tr class="border-b border-white/5 hover:bg-white/5">
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div>Sala</td>
+            <td class="text-right font-mono text-slate-300">${sStats.min.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${sStats.max.toFixed(1)}°</td>
+            <td class="text-right font-mono text-emerald-400 font-bold">${sStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-xs text-slate-500">±${sStats.std.toFixed(2)}</td>
+        </tr>
+        <tr class="border-b border-white/5 hover:bg-white/5">
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500"></div>Cuarto</td>
+            <td class="text-right font-mono text-slate-300">${cStats.min.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${cStats.max.toFixed(1)}°</td>
+            <td class="text-right font-mono text-cyan-400 font-bold">${cStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-xs text-slate-500">±${cStats.std.toFixed(2)}</td>
+        </tr>
+        <tr class="hover:bg-white/5">
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-amber-500"></div>Exterior</td>
+            <td class="text-right font-mono text-slate-300">${lStats.min.toFixed(1)}°</td>
+            <td class="text-right font-mono text-slate-300">${lStats.max.toFixed(1)}°</td>
+            <td class="text-right font-mono text-amber-400 font-bold">${lStats.avg.toFixed(1)}°</td>
+            <td class="text-right font-mono text-xs text-slate-500">±${lStats.std.toFixed(2)}</td>
+        </tr>
+    `;
+
+    // 6. Lista de Cortes
+    const list = document.getElementById("outages-list");
+    if (outages.length === 0) {
+        list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">
+            <i data-lucide="check-circle" class="w-4 h-4 mx-auto mb-1"></i>
+            Conexión Estable (Sin cortes > 20min)
+        </li>`;
+    } else {
+        list.innerHTML = outages.map(o => `
+            <li class="bg-rose-500/10 border border-rose-500/20 p-2 rounded flex justify-between items-center mb-2">
+                <div>
+                    <div class="text-[10px] text-rose-300 font-bold flex items-center gap-1"><i data-lucide="zap-off" class="w-3 h-3"></i> ${o.date}</div>
+                    <div class="text-xs text-slate-300 mt-0.5">${o.from} - ${o.to}</div>
+                </div>
+                <div class="text-right bg-rose-500/20 px-2 py-1 rounded">
+                    <span class="block text-xs font-bold text-rose-400">${o.duration} min</span>
+                </div>
+            </li>
+        `).join('');
+    }
+    
+    // Si lucide existe en el scope global, refrescar iconos insertados
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // 7. GRÁFICO DE BARRAS (Nuevo)
+    renderAnalyticsBarChart(sStats, cStats, lStats);
+};
+
+// Función para el gráfico de barras comparativo (Visual)
+const renderAnalyticsBarChart = (s, c, l) => {
+    const ctx = document.getElementById("analytics-chart").getContext("2d");
+    
+    if (analyticsChart) analyticsChart.destroy();
+
+    analyticsChart = new Chart(ctx, {
+        type: 'bar',
         data: {
-            labels: data1.map(d => d.hora),
+            labels: ['Sala', 'Cuarto', 'Exterior'],
             datasets: [
                 {
-                    label: `${label1} (Sala)`,
-                    data: data1.map(d => d.Sala),
-                    borderColor: "#3b82f6",
-                    tension: 0.4
+                    label: 'Mínima',
+                    data: [s.min, c.min, l.min],
+                    backgroundColor: '#94a3b8', // Slate 400
+                    borderRadius: 4,
                 },
                 {
-                    label: `${label2} (Sala)`,
-                    data: data2.map(d => d.Sala),
-                    borderColor: "#a855f7",
-                    tension: 0.4
+                    label: 'Promedio',
+                    data: [s.avg, c.avg, l.avg],
+                    backgroundColor: ['#10b981', '#06b6d4', '#fbbf24'], // Colores temáticos
+                    borderRadius: 4,
+                },
+                {
+                    label: 'Máxima',
+                    data: [s.max, c.max, l.max],
+                    backgroundColor: '#cbd5e1', // Slate 300
+                    borderRadius: 4,
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: "#cbd5e1" } } },
+            plugins: {
+                legend: { position: 'top', labels: { color: '#cbd5e1', font: {size: 10} } },
+                title: { display: false }
+            },
             scales: {
-                y: { grid: { color: "#3341554d" }, ticks: { color: "#94a3b8" } },
-                x: { grid: { color: "#3341554d" }, ticks: { color: "#94a3b8" } }
+                y: { 
+                    beginAtZero: false, 
+                    grid: { color: "#33415520" },
+                    ticks: { color: "#94a3b8" } 
+                },
+                x: { 
+                    grid: { display: false },
+                    ticks: { color: "#94a3b8" } 
+                }
             }
         }
     });
-};
-
-export const generatePrediction = () => {
-    // Mock de predicción
-    const div = document.getElementById("prediction-results");
-    div.innerHTML = `
-        <div class="bg-slate-700/50 p-3 rounded-lg flex justify-between items-center">
-            <span class="text-slate-300">Próxima hora</span>
-            <span class="text-orange-400 font-bold">15.2°C <span class="text-xs text-slate-500">tendencia subida</span></span>
-        </div>
-        <div class="bg-slate-700/50 p-3 rounded-lg flex justify-between items-center">
-            <span class="text-slate-300">En 3 horas</span>
-            <span class="text-orange-400 font-bold">14.8°C <span class="text-xs text-slate-500">estable</span></span>
-        </div>
-    `;
-};
-
-/**
- * NUEVO: Extrae los datos visibles en el gráfico para el CSV
- */
-export const getVisibleChartData = () => {
-    if (!myChart) return [];
-
-    const labels = myChart.data.labels; // Timestamps
-    const datasetLocal = myChart.data.datasets[0].data;
-    const datasetSala = myChart.data.datasets[1].data;
-    const datasetCuarto = myChart.data.datasets[2].data;
-
-    // Mapeamos a un formato filas: [Tiempo, ValorLocal, ValorSala, ValorCuarto]
-    const rows = labels.map((label, index) => {
-        return [
-            label,
-            datasetLocal[index],
-            datasetSala[index],
-            datasetCuarto[index]
-        ];
-    });
-
-    return rows;
 };

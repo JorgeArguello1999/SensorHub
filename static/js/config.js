@@ -21,12 +21,11 @@ export let realtimeData = {
   cuarto: { temperatura: 0, humedad: 0 },
 };
 
-// Estado del gráfico principal
-export let chartMode = "realtime"; // 'realtime' o 'history'
-export let historyHours = 2;       // Horas por defecto para historial
+// Estado del gráfico/vista
+export let chartMode = "realtime"; // 'realtime', 'history', 'analytics'
+export let historyHours = 2;       
 
 export let comparisonChartInstance = null;
-export let historicalChartInstance = null;
 export let currentChartDataType = "temperatura"; 
 
 // ----------------------------------------------------------------------
@@ -48,13 +47,19 @@ export let humCuarto = null;
 // Controles de Modo
 export let modeRealtimeBtn = null;
 export let modeHistoryBtn = null;
+export let modeAnalyticsBtn = null; // Nuevo
+
 export let historyControls = null;
 export let historyHoursInput = null;
 
-// --- NUEVOS: Controles de Rango ---
+// Controles de Rango (Fechas)
 export let historyStartInput = null;
 export let historyEndInput = null;
 export let rangeSearchBtn = null;
+
+// Paneles Vistas
+export let chartContainer = null;
+export let analyticsPanel = null;
 
 // Controles Predicción
 export let predictionDate = null;
@@ -75,16 +80,22 @@ export const initDOMRefs = () => {
   tempCuarto = document.getElementById("temp-cuarto");
   humCuarto = document.getElementById("hum-cuarto");
 
-  // Referencias Modo
+  // Botones Modo
   modeRealtimeBtn = document.getElementById("mode-realtime");
   modeHistoryBtn = document.getElementById("mode-history");
+  modeAnalyticsBtn = document.getElementById("mode-analytics");
+
+  // Controles
   historyControls = document.getElementById("history-controls");
   historyHoursInput = document.getElementById("history-hours-input");
   
-  // --- INICIALIZAR NUEVOS CONTROLES ---
   historyStartInput = document.getElementById("history-start");
   historyEndInput = document.getElementById("history-end");
   rangeSearchBtn = document.getElementById("mode-range-search");
+
+  // Vistas
+  chartContainer = document.getElementById("chart-container");
+  analyticsPanel = document.getElementById("analytics-panel");
 
   predictionDate = document.getElementById("prediction-date");
   predictButton = document.getElementById("predict-button");

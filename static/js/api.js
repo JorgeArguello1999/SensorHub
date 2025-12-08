@@ -43,23 +43,17 @@ export const fetchOpenWeatherMapData = async () => {
 };
 
 /**
- * Obtiene el historial por últimas N horas.
+ * Historial por Horas
  */
 export const fetchHourlyHistory = async (hours) => {
   try {
     const url = `/history?hours=${hours}`;
     const response = await fetch(url);
 
-    if (!response.ok) {
-      throw new Error(`Error HTTP: ${response.status}`);
-    }
-
+    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
     const json = await response.json();
 
-    if (!json.success) {
-      throw new Error("La API respondió con success: false");
-    }
-
+    if (!json.success) throw new Error("La API respondió con success: false");
     return json.data;
 
   } catch (error) {
@@ -70,9 +64,7 @@ export const fetchHourlyHistory = async (hours) => {
 };
 
 /**
- * NUEVO: Obtiene historial por rango de fechas (Desde - Hasta)
- * @param {string} start - Fecha inicio "YYYY-MM-DD HH:MM:SS"
- * @param {string} end - Fecha fin "YYYY-MM-DD HH:MM:SS"
+ * Historial por Rango Fechas
  */
 export const fetchRangeHistory = async (start, end) => {
     try {
@@ -83,7 +75,6 @@ export const fetchRangeHistory = async (start, end) => {
       const json = await response.json();
   
       if (!json.success) throw new Error("La API respondió con success: false");
-  
       return json.data;
   
     } catch (error) {
