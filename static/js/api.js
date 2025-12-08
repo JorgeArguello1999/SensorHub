@@ -8,7 +8,6 @@ import { setError } from "./utils.js";
 
 let app;
 try {
-  // Verificamos si firebase ya existe en el scope global (por CDN)
   if (typeof firebase !== 'undefined') {
       app = firebase.initializeApp(firebaseConfig);
   }
@@ -19,9 +18,6 @@ try {
 export const db = app ? app.database() : null;
 export const dataRef = db ? db.ref("/") : null;
 
-/**
- * Obtiene datos desde tu API Flask local (OpenWeather o Proxy).
- */
 export const fetchOpenWeatherMapData = async () => {
   if (!OPENWEATHER_URL) return null;
 
@@ -47,8 +43,7 @@ export const fetchOpenWeatherMapData = async () => {
 };
 
 /**
- * NUEVO: Obtiene el historial por horas desde el backend local.
- * Ruta: /history?hours=N
+ * Obtiene el historial por últimas N horas.
  */
 export const fetchHourlyHistory = async (hours) => {
   try {
@@ -65,7 +60,7 @@ export const fetchHourlyHistory = async (hours) => {
       throw new Error("La API respondió con success: false");
     }
 
-    return json.data; // Retornamos el array 'data'
+    return json.data;
 
   } catch (error) {
     console.error("Error fetching history:", error);
@@ -73,3 +68,27 @@ export const fetchHourlyHistory = async (hours) => {
     return [];
   }
 };
+
+/**
+ * NUEVO: Obtiene historial por rango de fechas (Desde - Hasta)
+ * @param {string} start - Fecha inicio "YYYY-MM-DD HH:MM:SS"
+ * @param {string} end - Fecha fin "YYYY-MM-DD HH:MM:SS"
+ */
+export const fetchRangeHistory = async (start, end) => {
+    try {
+      const url = `/history?start=${start}&end=${end}`; 
+      const response = await fetch(url);
+  
+      if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+      const json = await response.json();
+  
+      if (!json.success) throw new Error("La API respondió con success: false");
+  
+      return json.data;
+  
+    } catch (error) {
+      console.error("Error fetching range history:", error);
+      setError(`Error cargando rango: ${error.message}`);
+      return [];
+    }
+  };

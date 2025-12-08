@@ -7,13 +7,17 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
-  modeRealtimeBtn, // Referencia al botón Live
-  modeHistoryBtn,  // Referencia al botón Historial
+  modeRealtimeBtn, 
+  modeHistoryBtn,  
   historyHoursInput,
+  // Nuevas importaciones
+  historyStartInput,
+  historyEndInput,
+  rangeSearchBtn,
   chartMode as initialChartMode
 } from "./config.js";
 
-import { fetchHourlyHistory } from "./api.js";
+import { fetchHourlyHistory, fetchRangeHistory } from "./api.js";
 import { triggerCsvDownload, createLinearRegressionModel } from "./utils.js"; 
 import {
   renderCurrentStats,
@@ -21,7 +25,6 @@ import {
   updateChartRealTime,
   renderStaticChart, 
   switchTab,
-  toggleModeUI, // Asegúrate de que esta función en ui.js NO oculte los botones, solo cambie clases
   getVisibleChartData,
 } from "./ui.js";
 
@@ -31,11 +34,16 @@ import {
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
 
+// Helper para formatear fecha de input (YYYY-MM-DDTHH:MM) a DB (YYYY-MM-DD HH:MM:SS)
+const formatDateTimeInput = (val) => {
+    if (!val) return null;
+    return val.replace("T", " ") + ":00"; 
+};
+
 // ----------------------------------------------------------------------
 // PREDICCIONES (IA)
 // ----------------------------------------------------------------------
 const updatePredictions = async () => {
-    // Usamos 12 horas para tener una buena tendencia para la regresión
     const hoursForTrend = 12;
     let data = [];
     
@@ -45,14 +53,12 @@ const updatePredictions = async () => {
 
     if (!data || data.length < 2) return;
 
-    // Crear Modelos
     const modelSala = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.sala_temp) })));
     const modelCuarto = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.cuarto_temp) })));
     const modelLocal = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.local_temp) })));
 
     if(!modelSala) return;
 
-    // Fechas Objetivo
     const now = new Date();
     const morning = new Date(now); morning.setHours(9, 0, 0);
     const afternoon = new Date(now); afternoon.setHours(14, 0, 0);
@@ -77,7 +83,6 @@ const updatePredictions = async () => {
     render('pred-afternoon', afternoon);
     render('pred-night', night);
 
-    // Lógica botón custom
     const btnCustom = document.getElementById('btn-predict-custom');
     if (btnCustom) {
         btnCustom.onclick = () => {
@@ -108,18 +113,15 @@ const setupStreamListener = () => {
         loadingSpinner.classList.add("hidden"); 
       }
 
-      // Actualizar datos globales
       if (data.local) { realtimeData.local.temperatura = parseFloat(data.local.temperatura||0); realtimeData.local.humedad = parseFloat(data.local.humedad||0); }
       if (data.sala) { realtimeData.sala.temperatura = parseFloat(data.sala.temperatura||0); realtimeData.sala.humedad = parseFloat(data.sala.humedad||0); }
       if (data.cuarto) { realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura||0); realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad||0); }
 
       renderCurrentStats();
 
-      // Solo actualizar gráfico si estamos en LIVE
       if (chartMode === 'realtime') {
           updateChartRealTime(activeTab);
           
-          // Actualizar tabla
           const tableBody = document.getElementById('data-table-body');
           if (tableBody) {
               const row = `
@@ -140,24 +142,22 @@ const setupStreamListener = () => {
 };
 
 // ----------------------------------------------------------------------
-// CARGAR HISTORIAL
+// CARGAR HISTORIAL (POR HORAS)
 // ----------------------------------------------------------------------
 const loadHistoryData = async () => {
-    const hours = parseInt(historyHoursInput.value) || 12; // Default 12 si falla parse
+    const hours = parseInt(historyHoursInput.value) || 12; 
     const canvas = document.getElementById("comparison-chart");
     
     if(canvas) canvas.style.opacity = "0.5";
     
-    // Si estamos en modo historia, llamar API
     if (chartMode === 'history') {
         const data = await fetchHourlyHistory(hours);
         renderStaticChart(data, activeTab);
         
-        // Llenar tabla con historial también (opcional pero útil)
         const tableBody = document.getElementById('data-table-body');
         if (tableBody && data.length > 0) {
-            tableBody.innerHTML = ""; // Limpiar tabla
-            data.slice(0, 10).forEach(row => { // Mostrar últimos 10
+            tableBody.innerHTML = ""; 
+            data.slice(0, 10).forEach(row => { 
                  const tr = `
                     <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
                         <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
@@ -184,7 +184,17 @@ const setupEventListeners = () => {
     button.addEventListener("click", () => {
       if (button.dataset.tab !== activeTab) {
         activeTab = switchTab(button.dataset.tab);
-        if (chartMode === 'history') loadHistoryData();
+        // Si estamos en historia, recargar el gráfico con los mismos datos
+        // Nota: Idealmente deberíamos guardar los datos en memoria para no refetchear,
+        // pero para simplificar, llamamos a loadHistoryData de nuevo si es modo horas
+        if (chartMode === 'history') {
+            // Un pequeño truco: si tenemos input de rango lleno, usamos ese botón, si no, loadHistoryData
+            if(historyStartInput && historyStartInput.value && historyEndInput && historyEndInput.value) {
+                rangeSearchBtn.click();
+            } else {
+                loadHistoryData();
+            }
+        }
       }
     });
   });
@@ -194,17 +204,12 @@ const setupEventListeners = () => {
     modeRealtimeBtn.addEventListener("click", () => {
         chartMode = 'realtime';
         
-        // Estilos CSS
         modeRealtimeBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         
-        // Ocultar Input de Horas
         document.getElementById("history-controls").classList.add("hidden");
-        
-        // Limpiar gráfico
         initComparisonChart(activeTab);
         
-        // Limpiar tabla visualmente
         const tableBody = document.getElementById('data-table-body');
         if(tableBody) tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic" colspan="5">Modo En Vivo: Esperando datos...</td></tr>`;
     });
@@ -215,42 +220,93 @@ const setupEventListeners = () => {
     modeHistoryBtn.addEventListener("click", () => {
         chartMode = 'history';
 
-        // Estilos CSS
         modeHistoryBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
 
-        // Mostrar Input de Horas y poner 12 por defecto
         const controls = document.getElementById("history-controls");
         controls.classList.remove("hidden");
         historyHoursInput.value = "12"; 
 
-        // CARGAR DATOS AUTOMÁTICAMENTE (12h)
         loadHistoryData();
     });
   }
 
-  // 4. BOTÓN "BUSCAR" EN EL INPUT
+  // 4. BOTÓN "BUSCAR" (HORAS)
   const btnSearch = document.getElementById('mode-history-search');
   if(btnSearch) {
       btnSearch.addEventListener('click', () => {
-          loadHistoryData(); // Carga lo que tenga el input
+          loadHistoryData(); 
       });
   }
   
-  // 5. ENTER EN EL INPUT
+  // 5. ENTER EN EL INPUT HORAS
   if(historyHoursInput) {
       historyHoursInput.addEventListener('keypress', (e) => {
           if (e.key === 'Enter') loadHistoryData();
       });
   }
 
-  // 6. CSV DOWNLOAD
+  // 6. BOTÓN BÚSQUEDA POR RANGO (NUEVO)
+  if (rangeSearchBtn) {
+      rangeSearchBtn.addEventListener("click", async () => {
+          const startVal = historyStartInput.value;
+          const endVal = historyEndInput.value;
+
+          if (!startVal || !endVal) {
+              alert("Por favor selecciona ambas fechas (Desde y Hasta)");
+              return;
+          }
+
+          const canvas = document.getElementById("comparison-chart");
+          if(canvas) canvas.style.opacity = "0.5";
+
+          const startFmt = formatDateTimeInput(startVal);
+          const endFmt = formatDateTimeInput(endVal);
+
+          const data = await fetchRangeHistory(startFmt, endFmt);
+          
+          renderStaticChart(data, activeTab);
+          
+          // Actualizar tabla con resultados de rango
+          const tableBody = document.getElementById('data-table-body');
+          if (tableBody) {
+              tableBody.innerHTML = ""; 
+              if (data.length === 0) {
+                   tableBody.innerHTML = `<tr><td colspan="5" class="p-3 text-center text-slate-500">No hay datos en este rango.</td></tr>`;
+              } else {
+                  data.slice(0, 15).forEach(row => { 
+                       const tr = `
+                          <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                              <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp}</td>
+                              <td class="p-3 font-bold text-amber-500">${row.local_temp ? row.local_temp.toFixed(1) : '--'}°</td>
+                              <td class="p-3 font-bold text-emerald-500">${row.sala_temp ? row.sala_temp.toFixed(1) : '--'}°</td>
+                              <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp ? row.cuarto_temp.toFixed(1) : '--'}°</td>
+                              <td class="p-3"><span class="text-xs text-cyan-400">Rango</span></td>
+                          </tr>`;
+                       tableBody.insertAdjacentHTML('beforeend', tr);
+                  });
+              }
+          }
+
+          if(canvas) canvas.style.opacity = "1";
+      });
+  }
+
+  // 7. CSV DOWNLOAD
   if(downloadCsvButton) {
     downloadCsvButton.addEventListener("click", async () => {
         if (chartMode === 'history') {
-             const h = historyHoursInput.value || 12;
-             const data = await fetchHourlyHistory(h);
-             if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial.csv");
+             // Si hay fechas en los inputs de rango, priorizamos descargar ese rango
+             if (historyStartInput.value && historyEndInput.value) {
+                 const s = formatDateTimeInput(historyStartInput.value);
+                 const e = formatDateTimeInput(historyEndInput.value);
+                 const data = await fetchRangeHistory(s, e);
+                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial_rango.csv");
+             } else {
+                 const h = historyHoursInput.value || 12;
+                 const data = await fetchHourlyHistory(h);
+                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "historial.csv");
+             }
         } else {
              const rows = getVisibleChartData();
              if(rows.length) triggerCsvDownload(["Hora", "Local", "Sala", "Cuarto"], rows, "live.csv");
@@ -268,6 +324,5 @@ document.addEventListener("DOMContentLoaded", () => {
   initComparisonChart(activeTab);
   updatePredictions();
   
-  // Refrescar predicciones periódicamente
   setInterval(updatePredictions, 600000);
 });

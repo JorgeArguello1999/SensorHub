@@ -45,16 +45,18 @@ export let humSala = null;
 export let tempCuarto = null;
 export let humCuarto = null;
 
-// Controles de Modo (Nuevos)
+// Controles de Modo
 export let modeRealtimeBtn = null;
 export let modeHistoryBtn = null;
 export let historyControls = null;
 export let historyHoursInput = null;
 
-// Controles Históricos (Abajo) y Predicción
-export let date1Input = null;
-export let date2Input = null;
-export let compareButton = null;
+// --- NUEVOS: Controles de Rango ---
+export let historyStartInput = null;
+export let historyEndInput = null;
+export let rangeSearchBtn = null;
+
+// Controles Predicción
 export let predictionDate = null;
 export let predictButton = null;
 export let predictionResultsDiv = null;
@@ -73,15 +75,17 @@ export const initDOMRefs = () => {
   tempCuarto = document.getElementById("temp-cuarto");
   humCuarto = document.getElementById("hum-cuarto");
 
-  // --- NUEVAS REFERENCIAS PARA EL MODO ---
+  // Referencias Modo
   modeRealtimeBtn = document.getElementById("mode-realtime");
   modeHistoryBtn = document.getElementById("mode-history");
   historyControls = document.getElementById("history-controls");
   historyHoursInput = document.getElementById("history-hours-input");
+  
+  // --- INICIALIZAR NUEVOS CONTROLES ---
+  historyStartInput = document.getElementById("history-start");
+  historyEndInput = document.getElementById("history-end");
+  rangeSearchBtn = document.getElementById("mode-range-search");
 
-  date1Input = document.getElementById("date1-input");
-  date2Input = document.getElementById("date2-input");
-  compareButton = document.getElementById("compare-button");
   predictionDate = document.getElementById("prediction-date");
   predictButton = document.getElementById("predict-button");
   predictionResultsDiv = document.getElementById("prediction-results");
