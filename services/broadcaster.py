@@ -1,38 +1,38 @@
 from queue import Queue
 import threading
 
-# Lista global de clientes
+# Global list of connected clients
 connected_listeners = []
-# CANDADO DE SEGURIDAD (Nuevo)
+# LOCK FOR SAFETY (new)
 listeners_lock = threading.Lock()
 
 def broadcast_data(data):
     """
-    Envía datos a todos los clientes de forma segura.
+    Send data to all connected clients in a thread-safe way.
     """
-    # Usamos el candado para hacer una copia segura de la lista
+    # Use lock to safely copy the list
     with listeners_lock:
-        # Creamos una copia de la lista actual [:] para iterar
-        # Esto evita el error "list changed size during iteration"
+        # Make a shallow copy of the current list [:] to iterate over
+        # This prevents "list changed size during iteration" errors
         active_queues = connected_listeners[:]
 
     for q in active_queues:
         try:
-            # put_nowait evita bloquearse si la cola está llena
+            # put_nowait avoids blocking if the queue is full
             q.put_nowait(data)
         except Exception:
-            # Si una cola falla (llena o cerrada), la marcamos para limpieza
+            # If a queue fails (full or closed), ignore it for now
             pass
 
 def register_client():
-    """Registra un nuevo cliente."""
+    """Register a new client and return its queue."""
     q = Queue()
     with listeners_lock:
         connected_listeners.append(q)
     return q
 
 def remove_client(q):
-    """Elimina un cliente de forma segura."""
+    """Safely remove a client queue."""
     with listeners_lock:
         if q in connected_listeners:
             connected_listeners.remove(q)

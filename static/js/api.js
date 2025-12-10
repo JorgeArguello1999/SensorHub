@@ -43,7 +43,7 @@ export const fetchOpenWeatherMapData = async () => {
 };
 
 /**
- * Historial por Horas
+ * Hourly history
  */
 export const fetchHourlyHistory = async (hours) => {
   try {
@@ -64,7 +64,7 @@ export const fetchHourlyHistory = async (hours) => {
 };
 
 /**
- * Historial por Rango Fechas
+ * Range history (start/end)
  */
 export const fetchRangeHistory = async (start, end) => {
     try {

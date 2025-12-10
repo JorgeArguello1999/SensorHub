@@ -1,19 +1,19 @@
 // config.js
 
 // ----------------------------------------------------------------------
-// CONFIGURACIÓN FIREBASE
+// FIREBASE CONFIGURATION
 // ----------------------------------------------------------------------
 export const firebaseConfig = {
   databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/",
 };
 
 // ----------------------------------------------------------------------
-// CONFIGURACIÓN API LOCAL (FLASK)
+// LOCAL API CONFIG (FLASK)
 // ----------------------------------------------------------------------
 export const OPENWEATHER_URL = "/api/weather/";
 
 // ----------------------------------------------------------------------
-// VARIABLES DE ESTADO GLOBALES
+// GLOBAL STATE VARIABLES
 // ----------------------------------------------------------------------
 export let realtimeData = {
   local: { temperatura: 0, humedad: 0 },
@@ -21,7 +21,7 @@ export let realtimeData = {
   cuarto: { temperatura: 0, humedad: 0 },
 };
 
-// Estado del gráfico/vista
+// Chart/view state
 export let chartMode = "realtime"; // 'realtime', 'history', 'analytics'
 export let historyHours = 2;       
 
@@ -29,7 +29,7 @@ export let comparisonChartInstance = null;
 export let currentChartDataType = "temperatura"; 
 
 // ----------------------------------------------------------------------
-// REFERENCIAS DOM 
+// DOM REFERENCES
 // ----------------------------------------------------------------------
 export let loadingSpinner = null;
 export let lastUpdateSpan = null;
@@ -44,24 +44,24 @@ export let humSala = null;
 export let tempCuarto = null;
 export let humCuarto = null;
 
-// Controles de Modo
+// Mode controls
 export let modeRealtimeBtn = null;
 export let modeHistoryBtn = null;
-export let modeAnalyticsBtn = null; // Nuevo
+export let modeAnalyticsBtn = null; // New
 
 export let historyControls = null;
 export let historyHoursInput = null;
 
-// Controles de Rango (Fechas)
+// Range controls (dates)
 export let historyStartInput = null;
 export let historyEndInput = null;
 export let rangeSearchBtn = null;
 
-// Paneles Vistas
+// View panels
 export let chartContainer = null;
 export let analyticsPanel = null;
 
-// Controles Predicción
+// Prediction controls
 export let predictionDate = null;
 export let predictButton = null;
 export let predictionResultsDiv = null;
@@ -80,12 +80,12 @@ export const initDOMRefs = () => {
   tempCuarto = document.getElementById("temp-cuarto");
   humCuarto = document.getElementById("hum-cuarto");
 
-  // Botones Modo
+  // Mode buttons
   modeRealtimeBtn = document.getElementById("mode-realtime");
   modeHistoryBtn = document.getElementById("mode-history");
   modeAnalyticsBtn = document.getElementById("mode-analytics");
 
-  // Controles
+  // Controls
   historyControls = document.getElementById("history-controls");
   historyHoursInput = document.getElementById("history-hours-input");
   
@@ -93,7 +93,7 @@ export const initDOMRefs = () => {
   historyEndInput = document.getElementById("history-end");
   rangeSearchBtn = document.getElementById("mode-range-search");
 
-  // Vistas
+  // Views
   chartContainer = document.getElementById("chart-container");
   analyticsPanel = document.getElementById("analytics-panel");
 

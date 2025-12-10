@@ -10,7 +10,6 @@ from models.db import _db as db_client
 
 # Import routes
 from routers.stream import stream_routes
-from routers.history import history_routes
 from routers.api import api_routes
 from routers.index import home_page
 
@@ -22,7 +21,6 @@ app.config['SECRET_KEY'] = getenv('SECRET_KEY', 'dev_key')
 
 app.register_blueprint(home_page)
 app.register_blueprint(api_routes)
-app.register_blueprint(history_routes)
 app.register_blueprint(stream_routes)
 
 if __name__ == '__main__':

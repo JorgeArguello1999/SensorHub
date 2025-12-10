@@ -7,33 +7,33 @@ import pytz
 from sseclient import SSEClient
 from os import getenv
 
-# Importamos la DB compartida y el broadcaster
+# Import shared DB and broadcaster
 from models.db import _db as db_client
 from services.broadcaster import broadcast_data
 
-# --- CONFIGURACIÓN ---
+# --- CONFIG ---
 TIMEZONE_QUITO = pytz.timezone('America/Guayaquil')
-# URL de tu RTDB (Tomada de tu main.py anterior)
+# RTDB URL (taken from previous main.py)
 FIREBASE_RTDB_URL = "https://esp32-firebase-69994-default-rtdb.firebaseio.com/.json"
 OPENWEATHER_API_KEY = getenv('OPENWEATHER_API_KEY')
 
-# Intervalo de guardado en base de datos (Minutos)
+# Interval to save to DB (minutes)
 SAVE_INTERVAL_MINUTES = 15
 
-# Estado local en memoria (Última foto de los sensores)
+# In-memory local state (last snapshot from sensors)
 datos_sensores = {
     "cuarto": {"temperatura": 0, "humedad": 0},
     "sala": {"temperatura": 0, "humedad": 0},
-    "local": {"temperatura": 0, "humedad": 0} # Clima externo
+    "local": {"temperatura": 0, "humedad": 0} # External weather
 }
 
-# Variable para controlar cuándo guardar
+# Variable to control when to save
 last_save_time = 0
 
 def obtener_clima_local():
-    """Consulta OpenWeatherMap."""
+    """Query OpenWeatherMap."""
     try:
-        lat, lon = "-1.27442", "-78.638786" # Coordenadas Ambato
+        lat, lon = "-1.27442", "-78.638786" # Ambato coordinates
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&APPID={OPENWEATHER_API_KEY}"
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
@@ -47,7 +47,7 @@ def obtener_clima_local():
     return {"temperatura": 0, "humedad": 0}
 
 def guardar_en_firestore():
-    """Guarda el estado actual en Firestore para el historial."""
+    """Save the current state to Firestore for history."""
     if db_client is None:
         return
 
@@ -59,13 +59,13 @@ def guardar_en_firestore():
         print(f"❌ Error guardando historial: {e}")
 
 def procesar_cambio(path, data):
-    """Actualiza el diccionario local datos_sensores."""
+    """Update the in-memory datos_sensores dictionary."""
     global datos_sensores
     clean_path = path.strip("/")
     parts = clean_path.split("/")
     room_name = parts[0]
 
-    # Actualizar si es 'cuarto' o 'sala'
+    # Update if it's 'cuarto' or 'sala'
     if room_name in datos_sensores and room_name != "local":
         if len(parts) == 1: # path: /cuarto
             datos_sensores[room_name] = data
@@ -75,7 +75,7 @@ def procesar_cambio(path, data):
                 datos_sensores[room_name][metric] = data
         return True
     
-    # Carga inicial o reset total
+    # Initial load or total reset
     if not clean_path and isinstance(data, dict):
         cambio = False
         for key in data:
@@ -128,7 +128,7 @@ def _worker_loop():
             time.sleep(5)
 
 def start_sensor_worker():
-    """Inicia el worker en segundo plano."""
+    """Start the worker in a background thread."""
     t = threading.Thread(target=_worker_loop, daemon=True)
     t.start()
 
@@ -136,7 +136,7 @@ def _worker_loop():
     global last_save_time
     print("🚀 Worker IoT iniciado: Escuchando sensores...")
     
-    # Carga inicial del clima
+    # Initial load of external weather
     datos_sensores["local"] = obtener_clima_local()
 
     while True:
@@ -152,9 +152,9 @@ def _worker_loop():
                         hubo_cambio = procesar_cambio(payload["path"], payload["data"])
 
                         if hubo_cambio:
-                            # --- BLOQUE DE SEGURIDAD ---
-                            # Envolvemos el broadcast en un try/except propio.
-                            # Si falla la web, el sensor NO debe detenerse.
+                            # --- SAFETY BLOCK ---
+                            # Wrap broadcast in its own try/except.
+                            # If the web side fails, the sensor loop must NOT stop.
                             try:
                                 broadcast_data(datos_sensores)
                             except Exception as e:
@@ -171,6 +171,6 @@ def _worker_loop():
                 except json.JSONDecodeError:
                     pass
         except Exception as e:
-            # Captura general para que el hilo NUNCA muera
+            # General capture so the thread NEVER dies
             print(f"⚠️ Error crítico en Worker (reiniciando loop en 5s): {e}")
             time.sleep(5)

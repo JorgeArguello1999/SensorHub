@@ -8,7 +8,7 @@
 #include <DHT.h>
 
 // --------------------------------------------------
-// CONFIGURACIÓN SENSORES
+// SENSOR CONFIGURATION
 // --------------------------------------------------
 #define DHTPIN_CUARTO 14
 #define DHTPIN_SALA 27
@@ -18,13 +18,13 @@ DHT sensorCuarto(DHTPIN_CUARTO, DHTTYPE);
 DHT sensorSala(DHTPIN_SALA, DHTTYPE);
 
 // --------------------------------------------------
-// CONFIG WiFi
+// WiFi CONFIG
 // --------------------------------------------------
 const char* ssid = "";
 const char* password = "";
 
 // --------------------------------------------------
-// CONFIG FIREBASE
+// FIREBASE CONFIG
 // --------------------------------------------------
 #define API_KEY       ""
 #define DATABASE_URL  ""
@@ -41,12 +41,12 @@ RealtimeDatabase db;
 
 void processData(AsyncResult &aResult);
 
-// Envío a Firebase cada 10 segundos
+// Send to Firebase every 10 seconds
 unsigned long lastSend = 0;
 const unsigned long interval = 10000;
 
 // --------------------------------------------------
-// FUNCIÓN: Leer sensor
+// FUNCTION: Read sensor
 // --------------------------------------------------
 bool leerSensor(DHT& sensor, float& h, float& t) {
   h = sensor.readHumidity();
@@ -77,7 +77,7 @@ void setup() {
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
 
-  // Inicializar Firebase
+  // Initialize Firebase
   ssl_client.setInsecure();  
   initializeApp(aClient, app, getAuth(user_auth), processData, "authTask");
   app.getApp<RealtimeDatabase>(db);
@@ -100,12 +100,12 @@ void loop() {
 
   float hDorm, tDorm, hSala, tSala;
 
-  // Leer sensores
+  // Read sensors
   bool okDorm = leerSensor(sensorCuarto, hDorm, tDorm);
   delay(150);
   bool okSala = leerSensor(sensorSala, hSala, tSala);
 
-  // Subir a Firebase
+  // Upload to Firebase
   if (okDorm) {
     db.set<float>(aClient, "/cuarto/temperatura", tDorm, processData, "TDorm");
     db.set<float>(aClient, "/cuarto/humedad", hDorm, processData, "HDorm");
@@ -126,7 +126,7 @@ void loop() {
 }
 
 // --------------------------------------------------
-// DEBUG DE FIREBASE
+// FIREBASE DEBUG
 // --------------------------------------------------
 void processData(AsyncResult &aResult) {
   if (!aResult.isResult()) return;

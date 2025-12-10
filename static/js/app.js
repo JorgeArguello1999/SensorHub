@@ -7,11 +7,11 @@ import {
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
-  // Modos
+  // Modes
   modeRealtimeBtn, 
   modeHistoryBtn,
   modeAnalyticsBtn,
-  // Paneles
+  // Panels
   chartContainer,
   analyticsPanel,
   // Inputs
@@ -34,10 +34,10 @@ import {
   renderAnalytics 
 } from "./ui.js";
 
-// ESTADO LOCAL
+// LOCAL STATE
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
-// Variable para guardar los últimos datos traídos y no hacer fetch doble al cambiar tab
+// Cache the last fetched history to avoid double fetching on tab switches
 let cachedHistoryData = []; 
 
 const formatDateTimeInput = (val) => {
@@ -45,7 +45,7 @@ const formatDateTimeInput = (val) => {
     return val.replace("T", " ") + ":00"; 
 };
 
-// PREDICCIONES
+// PREDICTIONS
 const updatePredictions = async () => {
     const hoursForTrend = 12;
     let data = [];
@@ -94,7 +94,7 @@ const updatePredictions = async () => {
     }
 };
 
-// STREAM SSE
+// SSE STREAM
 const setupStreamListener = () => {
   const eventSource = new EventSource("/stream-data");
   eventSource.onmessage = (event) => {
@@ -133,7 +133,7 @@ const setupStreamListener = () => {
   };
 };
 
-// CARGA DE DATOS CENTRALIZADA
+// CENTRALIZED DATA LOADER
 const loadHistoryData = async () => {
     const hours = parseInt(historyHoursInput.value) || 12; 
     
@@ -143,10 +143,10 @@ const loadHistoryData = async () => {
 
     try {
         const data = await fetchHourlyHistory(hours);
-        cachedHistoryData = data; // Guardamos en caché
+        cachedHistoryData = data; // cache it
 
         if (chartMode === 'analytics') {
-            // PASAMOS activeTab PARA SABER SI ES TEMP O HUMEDAD
+            // pass activeTab to know if it's temp or humidity
             renderAnalytics(data, activeTab);
         } else if (chartMode === 'history') {
             renderStaticChart(data, activeTab);
@@ -175,25 +175,25 @@ const fillHistoryTable = (data) => {
     }
 };
 
-// EVENTOS
+// EVENTS
 const setupEventListeners = () => {
 
-  // TABS (Temperatura vs Humedad)
+  // TABS (Temperature vs Humidity)
   tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.tab !== activeTab) {
         activeTab = switchTab(button.dataset.tab);
         
-        // Si estamos en Analítica, actualizamos los datos con la pestaña seleccionada
+        // If we are in Analytics, update using the selected tab
         if (chartMode === 'analytics') {
-             // Si ya tenemos datos, no hacemos fetch de nuevo, solo renderizamos
+             // If we already have data, no need to refetch
              if (cachedHistoryData.length > 0) {
                  renderAnalytics(cachedHistoryData, activeTab);
              } else {
                  loadHistoryData();
              }
         } 
-        // Si estamos en Historial
+        // If we are in History mode
         else if (chartMode === 'history') {
              if (cachedHistoryData.length > 0) {
                  renderStaticChart(cachedHistoryData, activeTab);
@@ -205,7 +205,7 @@ const setupEventListeners = () => {
     });
   });
 
-  // MODO: LIVE
+  // MODE: LIVE
   if (modeRealtimeBtn) {
     modeRealtimeBtn.addEventListener("click", () => {
         chartMode = 'realtime';
@@ -223,7 +223,7 @@ const setupEventListeners = () => {
     });
   }
 
-  // MODO: HISTORIAL
+  // MODE: HISTORY
   if (modeHistoryBtn) {
     modeHistoryBtn.addEventListener("click", () => {
         chartMode = 'history';
@@ -240,7 +240,7 @@ const setupEventListeners = () => {
     });
   }
 
-  // MODO: ANALÍTICA
+  // MODE: ANALYTICS
   if (modeAnalyticsBtn) {
       modeAnalyticsBtn.addEventListener("click", () => {
           chartMode = 'analytics';
@@ -256,11 +256,11 @@ const setupEventListeners = () => {
       });
   }
 
-  // BOTÓN BUSCAR HORAS
+  // SEARCH HOURS BUTTON
   const btnSearch = document.getElementById('mode-history-search');
   if(btnSearch) btnSearch.addEventListener('click', loadHistoryData);
 
-  // BOTÓN BUSCAR RANGO
+  // RANGE SEARCH BUTTON
   if (rangeSearchBtn) {
       rangeSearchBtn.addEventListener("click", async () => {
           const startVal = historyStartInput.value;

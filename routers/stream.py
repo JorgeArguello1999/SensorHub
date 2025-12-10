@@ -7,19 +7,19 @@ stream_routes = Blueprint('stream', __name__, url_prefix='')
 @stream_routes.route('/stream-data')
 def stream_data():
     """
-    Endpoint SSE que mantiene la conexión abierta con el navegador.
-    Recibe los datos desde la memoria RAM (services/broadcaster.py).
+    SSE endpoint that keeps the connection open with the browser.
+    Receives data from in-memory broadcaster (services/broadcaster.py).
     """
     def generate():
         q = register_client()
         try:
             while True:
                 try:
-                    # Esperamos datos nuevos en la cola (timeout para keep-alive)
+                    # Wait for new data in the queue (timeout used as keep-alive)
                     data = q.get(timeout=10)
                     yield f"data: {json.dumps(data)}\n\n"
                 except Exception:
-                    # Enviar ping para mantener conexión viva
+                    # Send ping to keep the connection alive
                     yield ": keep-alive\n\n"
         except GeneratorExit:
             print("🔌 Cliente web desconectado.")

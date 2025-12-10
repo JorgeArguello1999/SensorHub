@@ -15,12 +15,12 @@ import {
   chartMode
 } from "./config.js";
 
-// Variables para instancias de gráficos
+// Variables for chart instances
 let myChart = null;           
 let analyticsChart = null;    
 
 /**
- * Actualiza las tarjetas de estadísticas (Texto grande, panel superior).
+ * Update the stats cards (large text, top panel).
  */
 export const renderCurrentStats = () => {
   const localTemp = realtimeData.local.temperatura;
@@ -37,7 +37,7 @@ export const renderCurrentStats = () => {
 };
 
 /**
- * INICIALIZA el gráfico de líneas (Vivo/Historial)
+ * Initialize the comparison line chart (Live / History)
  */
 export const initComparisonChart = (dataType) => {
   const ctx = document.getElementById("comparison-chart").getContext("2d");
@@ -103,7 +103,7 @@ export const initComparisonChart = (dataType) => {
 };
 
 /**
- * ACTUALIZA el gráfico en tiempo real
+ * Update the chart in real-time
  */
 export const updateChartRealTime = (currentDataType) => {
   if (!myChart || chartMode !== 'realtime') return;
@@ -137,7 +137,7 @@ export const updateChartRealTime = (currentDataType) => {
 };
 
 /**
- * PINTA EL HISTORIAL (Gráfico Estático)
+ * Render the static/history chart
  */
 export const renderStaticChart = (dataArray, currentDataType) => {
     if (!myChart) return;
@@ -193,7 +193,7 @@ export const getVisibleChartData = () => {
 
 /**
  * =========================================================================
- * LÓGICA DE ANALÍTICA (SOPORTA TEMP Y HUMEDAD)
+ * ANALYTICS LOGIC (SUPPORTS TEMP AND HUMIDITY)
  * =========================================================================
  */
 
@@ -202,7 +202,7 @@ const calculateStdDev = (arr, mean) => {
     return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
 };
 
-// AHORA RECIBE dataType ('temperatura' o 'humedad')
+// Now accepts dataType ('temperatura' or 'humedad')
 export const renderAnalytics = (data, dataType = 'temperatura') => {
     
     if (!data || data.length === 0) {
@@ -211,21 +211,21 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
         return;
     }
 
-    // 1. Configuración Dinámica según Tipo
+    // 1. Dynamic configuration based on type
     const isTemp = dataType === 'temperatura';
     const unit = isTemp ? "°" : "%";
-    // Sufijos de las llaves en el objeto data (ej: sala_temp vs sala_hum)
+    // Suffixes used in the data object (e.g., sala_temp vs sala_hum)
     const suffix = isTemp ? "_temp" : "_hum"; 
 
-    // 2. Inicialización
+    // 2. Initialization
     let salaVals = [], cuartoVals = [], localVals = [];
     let outages = [];
     let previousTime = null;
     const GAP_THRESHOLD_MS = 20 * 60 * 1000; 
 
-    // 3. Procesamiento
+    // 3. Processing
     data.forEach(d => {
-        // Acceso dinámico a propiedades: d['sala_temp'] o d['sala_hum']
+        // Dynamic property access: d['sala_temp'] or d['sala_hum']
         const valSala = d[`sala${suffix}`];
         const valCuarto = d[`cuarto${suffix}`];
         const valLocal = d[`local${suffix}`];
@@ -234,7 +234,7 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
         if (valCuarto !== null) cuartoVals.push(valCuarto);
         if (valLocal !== null) localVals.push(valLocal);
 
-        // Detección de Cortes (Independiente del tipo de dato, usa Timestamp)
+        // Outage detection (independent of data type, uses timestamp)
         const safeDateStr = d.timestamp.replace(" ", "T");
         const currentTime = new Date(safeDateStr).getTime();
         
@@ -255,7 +255,7 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
 
     const total = data.length;
 
-    // 4. Estadísticas
+    // 4. Statistics
     const getStats = (arr) => {
         if (arr.length === 0) return { min: 0, max: 0, avg: 0, std: 0 };
         const min = Math.min(...arr);
@@ -270,18 +270,18 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
     const cStats = getStats(cuartoVals);
     const lStats = getStats(localVals);
 
-    // 5. Renderizado KPIs
+    // 5. Render KPIs
     document.getElementById("stat-total-samples").textContent = total;
-    // Uptime simplificado
+    // Simplified uptime
     document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; 
     document.getElementById("stat-outages-count").textContent = outages.length;
     
-    // Promedios con UNIDAD dinámica
+    // Averages with dynamic UNIT
     document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + unit;
     document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + unit;
     document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + unit;
 
-    // 6. Tabla Detallada
+    // 6. Detailed table
     const tbody = document.getElementById("stats-minmax-body");
     tbody.innerHTML = `
         <tr class="border-b border-white/5 hover:bg-white/5">
@@ -307,7 +307,7 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
         </tr>
     `;
 
-    // 7. Lista Cortes
+    // 7. Outages list
     const list = document.getElementById("outages-list");
     if (outages.length === 0) {
         list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">
@@ -330,11 +330,11 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // 8. Gráfico de Barras con Etiqueta Correcta
+    // 8. Bar chart with correct label
     renderAnalyticsBarChart(sStats, cStats, lStats, isTemp ? "Temperatura" : "Humedad");
 };
 
-// Gráfico de Barras Comparativo
+// Comparative bar chart
 const renderAnalyticsBarChart = (s, c, l, labelType) => {
     const ctx = document.getElementById("analytics-chart").getContext("2d");
     
