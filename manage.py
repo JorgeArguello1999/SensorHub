@@ -5,16 +5,16 @@ load_dotenv()
 from flask import Flask
 import os
 
-# Importar base de datos
+# Import database
 from models.db import _db as db_client
 
-# Importar rutas
+# Import routes
 from routers.stream import stream_routes
 from routers.history import history_routes
 from routers.api import api_routes
 from routers.index import home_page
 
-# Importar el nuevo Worker de Sensores
+# Import Sensor Worker
 from services.sensor_worker import start_sensor_worker
 
 app = Flask(__name__)
@@ -26,15 +26,15 @@ app.register_blueprint(history_routes)
 app.register_blueprint(stream_routes)
 
 if __name__ == '__main__':
-    # Verificamos DB antes de iniciar
+    # Verify DB before starting
     if db_client is None:
-        print("❌ Firebase no inicializado. Revisa tus credenciales.")
+        print("❌ Firebase not initialized. Check your credentials.")
     else:
-        # INICIAMOS EL WORKER EN SEGUNDO PLANO
-        # Este hilo se encargará de escuchar al ESP32 y manejar los datos
+        # START THE WORKER IN THE BACKGROUND
+        # This thread will listen to the ESP32 and handle the data
         start_sensor_worker()
     
-    print("🚀 Servidor Web iniciando en http://127.0.0.1:5000")
+    print("🚀 Web Server starting at http://127.0.0.1:5000")
     
-    # IMPORTANTE: use_reloader=False evita que el worker se inicie dos veces
+    # IMPORTANT: use_reloader=False prevents the worker from starting twice
     app.run(debug=True, port=int(os.getenv("PORT", 5000)), threaded=True, use_reloader=False)
