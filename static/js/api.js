@@ -47,7 +47,7 @@ export const fetchOpenWeatherMapData = async () => {
  */
 export const fetchHourlyHistory = async (hours) => {
   try {
-    const url = `/history?hours=${hours}`;
+    const url = `/api/history?hours=${hours}`;
     const response = await fetch(url);
 
     if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
@@ -68,7 +68,7 @@ export const fetchHourlyHistory = async (hours) => {
  */
 export const fetchRangeHistory = async (start, end) => {
     try {
-      const url = `/history?start=${start}&end=${end}`; 
+      const url = `/api/history?start=${start}&end=${end}`; 
       const response = await fetch(url);
   
       if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);

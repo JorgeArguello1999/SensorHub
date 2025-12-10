@@ -137,7 +137,7 @@ export const updateChartRealTime = (currentDataType) => {
 };
 
 /**
- * Render the static/history chart
+ * Render the static/api/history chart
  */
 export const renderStaticChart = (dataArray, currentDataType) => {
     if (!myChart) return;
