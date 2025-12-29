@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor IoT & Analítica Pro</title>
+    <title>SensorHub Pro - IoT Dashboard</title>
 
     <meta name="theme-color" content="#0f172a">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -39,6 +39,7 @@
         .custom-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
         
+        /* Tabs */
         .mode-tab-active { background-color: #1e293b; color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.3); }
         .mode-tab-analytics { background-color: #312e81; color: #a5b4fc; border: 1px solid rgba(165, 180, 252, 0.3); }
         .mode-tab-inactive { color: #94a3b8; border: 1px solid transparent; }
@@ -57,276 +58,330 @@
                 <div>
                     <h1 class="font-bold text-lg tracking-wide text-white">SensorHub <span class="text-cyan-400">Pro</span></h1>
                     <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1">
-                        <i data-lucide="wifi" class="w-3 h-3"></i> Sistema Online
+                        <i data-lucide="wifi" class="w-3 h-3"></i> System Online
                     </div>
                 </div>
             </div>
-            <div class="flex items-center gap-4 bg-slate-800/50 py-1.5 px-4 rounded-full border border-white/5">
-                <span id="last-update" class="text-xs font-mono text-cyan-300">Sincronizando...</span>
-                <i data-lucide="refresh-cw" id="loading-spinner" class="w-3 h-3 text-cyan-400 animate-spin"></i>
+            
+            <div class="flex items-center gap-4">
+                <div class="hidden md:flex items-center gap-2 bg-slate-800/50 py-1.5 px-4 rounded-full border border-white/5">
+                    <span id="last-update" class="text-xs font-mono text-cyan-300">Syncing...</span>
+                    <i data-lucide="refresh-cw" id="loading-spinner" class="w-3 h-3 text-cyan-400 animate-spin"></i>
+                </div>
+
+                <button id="btn-auth-toggle" class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-white/10">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <span id="auth-btn-text">Sign In</span>
+                </button>
             </div>
         </div>
     </nav>
+
+    <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm hidden">
+        <div class="glass-panel w-full max-w-md p-8 rounded-2xl relative shadow-2xl shadow-cyan-500/10 scale-100 transition-transform">
+            <button id="btn-close-auth" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-white mb-1" id="auth-title">Welcome Back</h2>
+                <p class="text-sm text-slate-400" id="auth-subtitle">Sign in to manage your sensors</p>
+            </div>
+
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
+                    <input type="email" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="user@example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Password</label>
+                    <input type="password" required class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-cyan-500/20 transform hover:scale-[1.02]">
+                    <span id="auth-submit-text">Sign In</span>
+                </button>
+            </form>
+
+            <div class="mt-4 text-center">
+                <button id="btn-switch-auth" class="text-xs text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">
+                    Don't have an account? Sign Up
+                </button>
+            </div>
+        </div>
+    </div>
 
     <main class="max-w-[1600px] mx-auto px-4 py-6">
         
         <div id="error-message" class="mb-4"></div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-amber-500/30 transition-all">
-                <div class="absolute -right-6 -top-6 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex flex-col">
-                        <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Clima Exterior</span>
-                        <span class="text-[10px] text-slate-500">OpenWeather API</span>
+        <div id="dashboard-view">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-amber-500/30 transition-all">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Outdoor</span>
+                            <span class="text-[10px] text-slate-500">OpenWeather API</span>
+                        </div>
+                        <i data-lucide="cloud-sun" class="text-amber-400 w-5 h-5"></i>
                     </div>
-                    <i data-lucide="cloud-sun" class="text-amber-400 w-5 h-5"></i>
+                    <div class="flex items-end gap-3">
+                        <h2 id="temp-local" class="text-4xl font-bold text-white">--°</h2>
+                        <span id="hum-local" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
+                    </div>
                 </div>
-                <div class="flex items-end gap-3">
-                    <h2 id="temp-local" class="text-4xl font-bold text-white">--°</h2>
-                    <span id="hum-local" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
+
+                <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/30 transition-all">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Living Room</span>
+                            <span class="text-[10px] text-slate-500">Sensor Node 01</span>
+                        </div>
+                        <i data-lucide="sofa" class="text-emerald-400 w-5 h-5"></i>
+                    </div>
+                    <div class="flex items-end gap-3">
+                        <h2 id="temp-sala" class="text-4xl font-bold text-white">--°</h2>
+                        <span id="hum-sala" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-cyan-500/30 transition-all">
+                    <div class="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all"></div>
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Bedroom</span>
+                            <span class="text-[10px] text-slate-500">Sensor Node 02</span>
+                        </div>
+                        <i data-lucide="bed-double" class="text-cyan-400 w-5 h-5"></i>
+                    </div>
+                    <div class="flex items-end gap-3">
+                        <h2 id="temp-cuarto" class="text-4xl font-bold text-white">--°</h2>
+                        <span id="hum-cuarto" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/30 transition-all">
-                <div class="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex flex-col">
-                        <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Sala Principal</span>
-                        <span class="text-[10px] text-slate-500">Sensor Node 01</span>
-                    </div>
-                    <i data-lucide="sofa" class="text-emerald-400 w-5 h-5"></i>
-                </div>
-                <div class="flex items-end gap-3">
-                    <h2 id="temp-sala" class="text-4xl font-bold text-white">--°</h2>
-                    <span id="hum-sala" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
-                </div>
-            </div>
-
-            <div class="glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-cyan-500/30 transition-all">
-                <div class="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all"></div>
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex flex-col">
-                        <span class="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Dormitorio</span>
-                        <span class="text-[10px] text-slate-500">Sensor Node 02</span>
-                    </div>
-                    <i data-lucide="bed-double" class="text-cyan-400 w-5 h-5"></i>
-                </div>
-                <div class="flex items-end gap-3">
-                    <h2 id="temp-cuarto" class="text-4xl font-bold text-white">--°</h2>
-                    <span id="hum-cuarto" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 h-auto">
-            
-            <div class="lg:col-span-3 glass-panel rounded-2xl p-1 flex flex-col min-h-[550px]">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 h-auto">
                 
-                <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center p-4 border-b border-white/5 gap-4">
+                <div class="lg:col-span-3 glass-panel rounded-2xl p-1 flex flex-col min-h-[550px]">
                     
-                    <div class="flex items-center gap-4 flex-wrap">
-                        <div class="bg-slate-900/80 p-1 rounded-xl flex">
-                            <button id="mode-realtime" class="mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-cyan-400 live-dot"></span>
-                                EN VIVO
-                            </button>
-                            <button id="mode-history" class="mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
-                                <i data-lucide="history" class="w-3 h-3"></i>
-                                HISTORIAL
-                            </button>
-                            <button id="mode-analytics" class="mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
-                                <i data-lucide="bar-chart-2" class="w-3 h-3"></i>
-                                ANALÍTICA
-                            </button>
-                        </div>
-
-                        <div id="history-controls" class="hidden flex flex-wrap items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-white/10">
-                            <div class="flex items-center gap-2 border-r border-white/10 pr-3 mr-1">
-                                <span class="text-[10px] text-slate-400 font-bold uppercase">Últimas</span>
-                                <input type="number" id="history-hours-input" value="12" min="1" class="w-12 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-cyan-500">
-                                <span class="text-[10px] text-slate-400 font-bold uppercase">Horas</span>
-                                <button id="mode-history-search" class="p-1 bg-slate-700 hover:bg-cyan-600 rounded text-white transition-colors">
-                                    <i data-lucide="play" class="w-3 h-3"></i>
-                                </button>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-slate-400 font-bold uppercase">Rango</span>
-                                <input type="datetime-local" id="history-start" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500 w-32">
-                                <span class="text-slate-500 text-xs">-</span>
-                                <input type="datetime-local" id="history-end" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500 w-32">
-                                <button id="mode-range-search" class="ml-1 p-1 bg-cyan-600 hover:bg-cyan-500 rounded text-white transition-colors shadow-lg shadow-cyan-500/20">
-                                    <i data-lucide="search" class="w-3 h-3"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
-                        <div class="flex bg-slate-900/50 p-1 rounded-lg">
-                            <button id="tab-temperatura" data-tab="temperatura" class="tab-button px-4 py-1.5 text-xs font-semibold rounded-md text-cyan-400 bg-slate-700 shadow-sm transition-all">
-                                Temp
-                            </button>
-                            <button id="tab-humedad" data-tab="humedad" class="tab-button px-4 py-1.5 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition-all">
-                                Hum
-                            </button>
-                        </div>
-
-                        <button id="download-csv-button" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition-all flex items-center gap-2 border border-white/5">
-                            <i data-lucide="download" class="w-3 h-3"></i> 
-                            <span class="hidden sm:inline">CSV</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="chart-container" class="flex-1 relative w-full h-full p-4">
-                    <canvas id="comparison-chart"></canvas>
-                </div>
-
-                <div id="analytics-panel" class="hidden flex-1 w-full h-full p-6 overflow-y-auto custom-scroll">
-                    
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                        <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 col-span-1 md:col-span-1">
-                            <span class="text-[10px] text-slate-400 uppercase font-bold">Total Muestras</span>
-                            <div class="text-xl md:text-2xl font-bold text-white mt-1" id="stat-total-samples">--</div>
-                        </div>
-                        <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 col-span-1 md:col-span-1">
-                            <span class="text-[10px] text-slate-400 uppercase font-bold">Cortes (>20m)</span>
-                            <div class="text-xl md:text-2xl font-bold text-rose-400 mt-1" id="stat-outages-count">--</div>
-                        </div>
+                    <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center p-4 border-b border-white/5 gap-4">
                         
-                        <div class="bg-emerald-900/20 p-3 rounded-xl border border-emerald-500/20 col-span-2 md:col-span-1">
-                            <span class="text-[10px] text-emerald-400 uppercase font-bold">Avg Sala</span>
-                            <div class="text-xl md:text-2xl font-bold text-emerald-400 mt-1" id="avg-sala-display">--°</div>
-                        </div>
-                        <div class="bg-cyan-900/20 p-3 rounded-xl border border-cyan-500/20 col-span-2 md:col-span-1">
-                            <span class="text-[10px] text-cyan-400 uppercase font-bold">Avg Cuarto</span>
-                            <div class="text-xl md:text-2xl font-bold text-cyan-400 mt-1" id="avg-cuarto-display">--°</div>
-                        </div>
-                        <div class="bg-amber-900/20 p-3 rounded-xl border border-amber-500/20 col-span-2 md:col-span-1">
-                            <span class="text-[10px] text-amber-400 uppercase font-bold">Avg Ext</span>
-                            <div class="text-xl md:text-2xl font-bold text-amber-400 mt-1" id="avg-local-display">--°</div>
-                        </div>
-                    </div>
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <div class="bg-slate-900/80 p-1 rounded-xl flex">
+                                <button id="mode-realtime" class="mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-cyan-400 live-dot"></span>
+                                    LIVE
+                                </button>
+                                <button id="mode-history" class="mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="history" class="w-3 h-3"></i>
+                                    HISTORY
+                                </button>
+                                <button id="mode-analytics" class="mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2">
+                                    <i data-lucide="bar-chart-2" class="w-3 h-3"></i>
+                                    ANALYTICS
+                                </button>
+                            </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[300px]">
-                        <div class="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col">
-                            <h4 class="text-xs font-bold text-slate-300 uppercase mb-4 flex items-center gap-2">
-                                <i data-lucide="bar-chart" class="w-3 h-3 text-indigo-400"></i> Comparativa Térmica
-                            </h4>
-                            <div class="flex-1 relative">
-                                <canvas id="analytics-chart"></canvas>
+                            <div id="history-controls" class="hidden flex flex-wrap items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-white/10">
+                                <div class="flex items-center gap-2 border-r border-white/10 pr-3 mr-1">
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">Last</span>
+                                    <input type="number" id="history-hours-input" value="12" min="1" class="w-12 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-cyan-500">
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">Hours</span>
+                                    <button id="mode-history-search" class="p-1 bg-slate-700 hover:bg-cyan-600 rounded text-white transition-colors">
+                                        <i data-lucide="play" class="w-3 h-3"></i>
+                                    </button>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] text-slate-400 font-bold uppercase">Range</span>
+                                    <input type="datetime-local" id="history-start" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500 w-32">
+                                    <span class="text-slate-500 text-xs">-</span>
+                                    <input type="datetime-local" id="history-end" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500 w-32">
+                                    <button id="mode-range-search" class="ml-1 p-1 bg-cyan-600 hover:bg-cyan-500 rounded text-white transition-colors shadow-lg shadow-cyan-500/20">
+                                        <i data-lucide="search" class="w-3 h-3"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col">
-                            <div class="flex justify-between items-center mb-4">
-                                <h4 class="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
-                                    <i data-lucide="table" class="w-3 h-3 text-cyan-400"></i> Métricas & Estabilidad
+                        <div class="flex items-center gap-3 w-full xl:w-auto justify-between xl:justify-end">
+                            <div class="flex bg-slate-900/50 p-1 rounded-lg">
+                                <button id="tab-temperatura" data-tab="temperatura" class="tab-button px-4 py-1.5 text-xs font-semibold rounded-md text-cyan-400 bg-slate-700 shadow-sm transition-all">
+                                    Temp
+                                </button>
+                                <button id="tab-humedad" data-tab="humedad" class="tab-button px-4 py-1.5 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition-all">
+                                    Hum
+                                </button>
+                            </div>
+                            <button id="download-csv-button" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition-all flex items-center gap-2 border border-white/5">
+                                <i data-lucide="download" class="w-3 h-3"></i> 
+                                <span class="hidden sm:inline">CSV</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="chart-container" class="flex-1 relative w-full h-full p-4">
+                        <canvas id="comparison-chart"></canvas>
+                    </div>
+
+                    <div id="analytics-panel" class="hidden flex-1 w-full h-full p-6 overflow-y-auto custom-scroll">
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                            <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 col-span-1 md:col-span-1">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold">Total Samples</span>
+                                <div class="text-xl md:text-2xl font-bold text-white mt-1" id="stat-total-samples">--</div>
+                            </div>
+                            <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 col-span-1 md:col-span-1">
+                                <span class="text-[10px] text-slate-400 uppercase font-bold">Outages (>20m)</span>
+                                <div class="text-xl md:text-2xl font-bold text-rose-400 mt-1" id="stat-outages-count">--</div>
+                            </div>
+                            <div class="bg-emerald-900/20 p-3 rounded-xl border border-emerald-500/20 col-span-2 md:col-span-1">
+                                <span class="text-[10px] text-emerald-400 uppercase font-bold">Avg Living</span>
+                                <div class="text-xl md:text-2xl font-bold text-emerald-400 mt-1" id="avg-sala-display">--°</div>
+                            </div>
+                            <div class="bg-cyan-900/20 p-3 rounded-xl border border-cyan-500/20 col-span-2 md:col-span-1">
+                                <span class="text-[10px] text-cyan-400 uppercase font-bold">Avg Bedrm</span>
+                                <div class="text-xl md:text-2xl font-bold text-cyan-400 mt-1" id="avg-cuarto-display">--°</div>
+                            </div>
+                            <div class="bg-amber-900/20 p-3 rounded-xl border border-amber-500/20 col-span-2 md:col-span-1">
+                                <span class="text-[10px] text-amber-400 uppercase font-bold">Avg Outdoor</span>
+                                <div class="text-xl md:text-2xl font-bold text-amber-400 mt-1" id="avg-local-display">--°</div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[300px]">
+                            <div class="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col">
+                                <h4 class="text-xs font-bold text-slate-300 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="bar-chart" class="w-3 h-3 text-indigo-400"></i> Thermal Comparison
                                 </h4>
-                                <div class="bg-slate-900 px-2 py-1 rounded text-[10px] text-emerald-400 font-bold border border-emerald-500/20">
-                                    Uptime: <span id="stat-uptime">--%</span>
+                                <div class="flex-1 relative">
+                                    <canvas id="analytics-chart"></canvas>
                                 </div>
                             </div>
 
-                            <table class="w-full text-left text-xs mb-4">
-                                <thead>
-                                    <tr class="text-slate-500 border-b border-white/5">
-                                        <th class="pb-2 pl-2">Zona</th>
-                                        <th class="pb-2 text-right">Mín</th>
-                                        <th class="pb-2 text-right">Máx</th>
-                                        <th class="pb-2 text-right">Avg</th>
-                                        <th class="pb-2 text-right" title="Desviación Estándar">Estabilidad (SD)</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="text-slate-300 space-y-2" id="stats-minmax-body">
-                                    </tbody>
-                            </table>
+                            <div class="bg-slate-800/30 rounded-xl p-4 border border-white/5 flex flex-col">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 class="text-xs font-bold text-slate-300 uppercase flex items-center gap-2">
+                                        <i data-lucide="table" class="w-3 h-3 text-cyan-400"></i> Metrics & Stability
+                                    </h4>
+                                    <div class="bg-slate-900 px-2 py-1 rounded text-[10px] text-emerald-400 font-bold border border-emerald-500/20">
+                                        Uptime: <span id="stat-uptime">--%</span>
+                                    </div>
+                                </div>
 
-                            <h5 class="text-[10px] font-bold text-rose-400 uppercase mb-2 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3 h-3"></i> Log de Cortes (>20m)
-                            </h5>
-                            <div class="overflow-y-auto flex-1 custom-scroll pr-2 border-t border-white/5 pt-2">
-                                <ul id="outages-list" class="space-y-1">
-                                    <li class="text-xs text-slate-500 italic">Cargando datos...</li>
-                                </ul>
+                                <table class="w-full text-left text-xs mb-4">
+                                    <thead>
+                                        <tr class="text-slate-500 border-b border-white/5">
+                                            <th class="pb-2 pl-2">Zone</th>
+                                            <th class="pb-2 text-right">Min</th>
+                                            <th class="pb-2 text-right">Max</th>
+                                            <th class="pb-2 text-right">Avg</th>
+                                            <th class="pb-2 text-right" title="Standard Deviation">Stability (SD)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-slate-300 space-y-2" id="stats-minmax-body">
+                                        </tbody>
+                                </table>
+
+                                <h5 class="text-[10px] font-bold text-rose-400 uppercase mb-2 flex items-center gap-1">
+                                    <i data-lucide="alert-circle" class="w-3 h-3"></i> Outage Log (>20m)
+                                </h5>
+                                <div class="overflow-y-auto flex-1 custom-scroll pr-2 border-t border-white/5 pt-2">
+                                    <ul id="outages-list" class="space-y-1">
+                                        <li class="text-xs text-slate-500 italic">Loading data...</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="lg:col-span-1 flex flex-col h-full">
+                    <div class="glass-panel rounded-2xl p-5 flex-1 flex flex-col">
+                        <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                            <i data-lucide="brain-circuit" class="w-4 h-4 text-purple-400"></i>
+                            AI Predictions
+                        </h3>
+
+                        <div class="space-y-3 mb-4 flex-1">
+                            <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <i data-lucide="sunrise" class="w-4 h-4 text-yellow-500"></i>
+                                    <span class="text-[10px] text-slate-400 uppercase font-bold">Morning (09:00)</span>
+                                </div>
+                                <div id="pred-morning" class="text-xs font-mono text-white">Calculating...</div>
+                            </div>
+                            <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <i data-lucide="sun" class="w-4 h-4 text-orange-500"></i>
+                                    <span class="text-[10px] text-slate-400 uppercase font-bold">Afternoon (14:00)</span>
+                                </div>
+                                <div id="pred-afternoon" class="text-xs font-mono text-white">Calculating...</div>
+                            </div>
+                            <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <i data-lucide="moon" class="w-4 h-4 text-indigo-400"></i>
+                                    <span class="text-[10px] text-slate-400 uppercase font-bold">Night (20:00)</span>
+                                </div>
+                                <div id="pred-night" class="text-xs font-mono text-white">Calculating...</div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-white/5 mt-auto">
+                            <label class="text-[10px] text-slate-400 font-bold uppercase mb-2 block">Check Time</label>
+                            <div class="flex gap-2">
+                                <input type="time" id="pred-time-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white">
+                                <button id="btn-predict-custom" class="bg-purple-600 hover:bg-purple-500 text-white px-3 rounded-lg text-xs font-bold transition-colors">
+                                    <i data-lucide="search" class="w-3 h-3"></i>
+                                </button>
+                            </div>
+                            <div id="custom-prediction-result" class="mt-3 bg-purple-500/10 border border-purple-500/20 rounded-lg p-2 text-center text-xs hidden">
+                                <span class="text-slate-400 block mb-1">Prediction:</span>
+                                <span class="text-white font-bold text-lg" id="custom-pred-value">--</span>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
 
-            <div class="lg:col-span-1 flex flex-col h-full">
-                <div class="glass-panel rounded-2xl p-5 flex-1 flex flex-col">
-                    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                        <i data-lucide="brain-circuit" class="w-4 h-4 text-purple-400"></i>
-                        Predicción IA
-                    </h3>
-
-                    <div class="space-y-3 mb-4 flex-1">
-                        <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
-                            <div class="flex items-center gap-2 mb-1">
-                                <i data-lucide="sunrise" class="w-4 h-4 text-yellow-500"></i>
-                                <span class="text-[10px] text-slate-400 uppercase font-bold">Mañana (09:00)</span>
-                            </div>
-                            <div id="pred-morning" class="text-xs font-mono text-white">Calculando...</div>
-                        </div>
-                        <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
-                            <div class="flex items-center gap-2 mb-1">
-                                <i data-lucide="sun" class="w-4 h-4 text-orange-500"></i>
-                                <span class="text-[10px] text-slate-400 uppercase font-bold">Tarde (14:00)</span>
-                            </div>
-                            <div id="pred-afternoon" class="text-xs font-mono text-white">Calculando...</div>
-                        </div>
-                        <div class="bg-slate-800/50 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
-                            <div class="flex items-center gap-2 mb-1">
-                                <i data-lucide="moon" class="w-4 h-4 text-indigo-400"></i>
-                                <span class="text-[10px] text-slate-400 uppercase font-bold">Noche (20:00)</span>
-                            </div>
-                            <div id="pred-night" class="text-xs font-mono text-white">Calculando...</div>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-white/5 mt-auto">
-                        <label class="text-[10px] text-slate-400 font-bold uppercase mb-2 block">Consultar Hora</label>
-                        <div class="flex gap-2">
-                            <input type="time" id="pred-time-input" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white">
-                            <button id="btn-predict-custom" class="bg-purple-600 hover:bg-purple-500 text-white px-3 rounded-lg text-xs font-bold transition-colors">
-                                <i data-lucide="search" class="w-3 h-3"></i>
-                            </button>
-                        </div>
-                        <div id="custom-prediction-result" class="mt-3 bg-purple-500/10 border border-purple-500/20 rounded-lg p-2 text-center text-xs hidden">
-                            <span class="text-slate-400 block mb-1">Pronóstico Sala:</span>
-                            <span class="text-white font-bold text-lg" id="custom-pred-value">--</span>
-                        </div>
-                    </div>
+            <div class="mt-6 glass-panel rounded-2xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <i data-lucide="table-2" class="w-5 h-5 text-cyan-400"></i> Data Log
+                </h3>
+                <div class="overflow-x-auto custom-scroll max-h-[300px]">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-sm z-10">
+                            <tr class="border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <th class="p-3">Timestamp</th>
+                                <th class="p-3 text-amber-400">Outdoor</th>
+                                <th class="p-3 text-emerald-400">Living</th>
+                                <th class="p-3 text-cyan-400">Bedrm</th>
+                                <th class="p-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm text-slate-300 font-mono" id="data-table-body">
+                            <tr>
+                                <td class="p-3 text-slate-500 italic" colspan="5">Waiting for live data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <div class="mt-6 glass-panel rounded-2xl p-6">
-            <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <i data-lucide="table-2" class="w-5 h-5 text-cyan-400"></i> Registro de Datos
-            </h3>
-            <div class="overflow-x-auto custom-scroll max-h-[300px]">
-                <table class="w-full text-left border-collapse">
-                    <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-sm z-10">
-                        <tr class="border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            <th class="p-3">Timestamp</th>
-                            <th class="p-3 text-amber-400">Local</th>
-                            <th class="p-3 text-emerald-400">Sala</th>
-                            <th class="p-3 text-cyan-400">Cuarto</th>
-                            <th class="p-3">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-sm text-slate-300 font-mono" id="data-table-body">
-                        <tr>
-                            <td class="p-3 text-slate-500 italic" colspan="5">Esperando datos...</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div id="sensor-management-view" class="hidden">
+            <div class="glass-panel rounded-2xl p-8 max-w-4xl mx-auto">
+                <div class="flex justify-between items-center mb-8 border-b border-white/10 pb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-2">Sensor Management</h2>
+                        <p class="text-slate-400 text-sm">Configure your ESP32 nodes and locations.</p>
+                    </div>
+                    <button id="btn-add-sensor" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm shadow-lg shadow-cyan-500/20 transition-all">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Sensor
+                    </button>
+                </div>
+
+                <div class="grid gap-4" id="sensor-list-container">
+                    </div>
             </div>
         </div>
 

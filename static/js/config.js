@@ -22,11 +22,18 @@ export let realtimeData = {
 };
 
 // Chart/view state
-export let chartMode = "realtime"; // 'realtime', 'history', 'analytics'
+export let chartMode = "realtime"; 
 export let historyHours = 2;       
 
 export let comparisonChartInstance = null;
 export let currentChartDataType = "temperatura"; 
+
+// --- USER STATE (New) ---
+export let isUserLoggedIn = false;
+export let userSensors = [
+    { id: 1, name: "Living Room Node", location: "sala", token: "esp32_token_sala_01", status: "active" },
+    { id: 2, name: "Bedroom Node", location: "cuarto", token: "esp32_token_cuarto_02", status: "active" }
+];
 
 // ----------------------------------------------------------------------
 // DOM REFERENCES
@@ -47,7 +54,7 @@ export let humCuarto = null;
 // Mode controls
 export let modeRealtimeBtn = null;
 export let modeHistoryBtn = null;
-export let modeAnalyticsBtn = null; // New
+export let modeAnalyticsBtn = null;
 
 export let historyControls = null;
 export let historyHoursInput = null;
@@ -57,9 +64,20 @@ export let historyStartInput = null;
 export let historyEndInput = null;
 export let rangeSearchBtn = null;
 
-// View panels
+// Views (Panels)
 export let chartContainer = null;
 export let analyticsPanel = null;
+export let dashboardView = null; // New Main View
+export let sensorManagementView = null; // New Management View
+
+// Auth & Sensors (New)
+export let btnAuthToggle = null;
+export let authModal = null;
+export let btnCloseAuth = null;
+export let authForm = null;
+export let btnSwitchAuth = null; 
+export let sensorListContainer = null;
+export let btnAddSensor = null;
 
 // Prediction controls
 export let predictionDate = null;
@@ -80,12 +98,10 @@ export const initDOMRefs = () => {
   tempCuarto = document.getElementById("temp-cuarto");
   humCuarto = document.getElementById("hum-cuarto");
 
-  // Mode buttons
   modeRealtimeBtn = document.getElementById("mode-realtime");
   modeHistoryBtn = document.getElementById("mode-history");
   modeAnalyticsBtn = document.getElementById("mode-analytics");
 
-  // Controls
   historyControls = document.getElementById("history-controls");
   historyHoursInput = document.getElementById("history-hours-input");
   
@@ -96,6 +112,21 @@ export const initDOMRefs = () => {
   // Views
   chartContainer = document.getElementById("chart-container");
   analyticsPanel = document.getElementById("analytics-panel");
+  
+  // New Views Refs
+  dashboardView = document.getElementById("dashboard-view");
+  sensorManagementView = document.getElementById("sensor-management-view");
+
+  // New Auth Refs
+  btnAuthToggle = document.getElementById("btn-auth-toggle");
+  authModal = document.getElementById("auth-modal");
+  btnCloseAuth = document.getElementById("btn-close-auth");
+  authForm = document.getElementById("auth-form");
+  btnSwitchAuth = document.getElementById("btn-switch-auth");
+  
+  // New Sensor Mgmt Refs
+  sensorListContainer = document.getElementById("sensor-list-container");
+  btnAddSensor = document.getElementById("btn-add-sensor");
 
   predictionDate = document.getElementById("prediction-date");
   predictButton = document.getElementById("predict-button");

@@ -54,7 +54,7 @@ def get_sensor_history():
             end_doc_ref = col_ref.document(end_param)
             
             query = query.where('__name__', '>=', start_doc_ref)\
-                         .where('__name__', '<=', end_doc_ref)
+                        .where('__name__', '<=', end_doc_ref)
         else:
             now = datetime.now()
             time_threshold = now - timedelta(hours=hours_param)

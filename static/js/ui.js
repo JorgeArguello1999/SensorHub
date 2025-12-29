@@ -11,8 +11,12 @@ import {
   modeRealtimeBtn,
   modeHistoryBtn,
   modeAnalyticsBtn,
-  historyControls,
-  chartMode
+  chartMode,
+  // New imports
+  userSensors,
+  sensorListContainer,
+  authModal,
+  btnAuthToggle
 } from "./config.js";
 
 // Variables for chart instances
@@ -45,7 +49,8 @@ export const initComparisonChart = (dataType) => {
 
   const isTemperature = dataType === "temperatura";
   const unit = isTemperature ? "°C" : "%";
-  const labelTitle = isTemperature ? "Temperatura" : "Humedad";
+  // ENGLISH LABELS
+  const labelTitle = isTemperature ? "Temperature" : "Humidity";
 
   myChart = new Chart(ctx, {
     type: "line",
@@ -53,7 +58,7 @@ export const initComparisonChart = (dataType) => {
       labels: [], 
       datasets: [
         {
-          label: `${labelTitle} Local`,
+          label: `${labelTitle} Outdoor`,
           data: [],
           borderColor: "#fbbf24", // Amber
           backgroundColor: "#fbbf24",
@@ -62,7 +67,7 @@ export const initComparisonChart = (dataType) => {
           pointRadius: 3,
         },
         {
-          label: `${labelTitle} Sala`,
+          label: `${labelTitle} Living`,
           data: [],
           borderColor: "#10b981", // Emerald
           backgroundColor: "#10b981",
@@ -71,7 +76,7 @@ export const initComparisonChart = (dataType) => {
           pointRadius: 3,
         },
         {
-          label: `${labelTitle} Cuarto`,
+          label: `${labelTitle} Bedroom`,
           data: [],
           borderColor: "#06b6d4", // Cyan
           backgroundColor: "#06b6d4",
@@ -109,7 +114,7 @@ export const updateChartRealTime = (currentDataType) => {
   if (!myChart || chartMode !== 'realtime') return;
 
   const now = new Date();
-  const timeLabel = now.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const timeLabel = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   myChart.data.labels.push(timeLabel);
 
@@ -193,7 +198,7 @@ export const getVisibleChartData = () => {
 
 /**
  * =========================================================================
- * ANALYTICS LOGIC (SUPPORTS TEMP AND HUMIDITY)
+ * ANALYTICS LOGIC
  * =========================================================================
  */
 
@@ -202,30 +207,24 @@ const calculateStdDev = (arr, mean) => {
     return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
 };
 
-// Now accepts dataType ('temperatura' or 'humedad')
 export const renderAnalytics = (data, dataType = 'temperatura') => {
     
     if (!data || data.length === 0) {
         document.getElementById("stat-total-samples").textContent = "0";
-        document.getElementById("outages-list").innerHTML = '<li class="text-xs text-slate-500 italic p-2">Sin datos para analizar.</li>';
+        document.getElementById("outages-list").innerHTML = '<li class="text-xs text-slate-500 italic p-2">No data available.</li>';
         return;
     }
 
-    // 1. Dynamic configuration based on type
     const isTemp = dataType === 'temperatura';
     const unit = isTemp ? "°" : "%";
-    // Suffixes used in the data object (e.g., sala_temp vs sala_hum)
     const suffix = isTemp ? "_temp" : "_hum"; 
 
-    // 2. Initialization
     let salaVals = [], cuartoVals = [], localVals = [];
     let outages = [];
     let previousTime = null;
     const GAP_THRESHOLD_MS = 20 * 60 * 1000; 
 
-    // 3. Processing
     data.forEach(d => {
-        // Dynamic property access: d['sala_temp'] or d['sala_hum']
         const valSala = d[`sala${suffix}`];
         const valCuarto = d[`cuarto${suffix}`];
         const valLocal = d[`local${suffix}`];
@@ -234,7 +233,6 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
         if (valCuarto !== null) cuartoVals.push(valCuarto);
         if (valLocal !== null) localVals.push(valLocal);
 
-        // Outage detection (independent of data type, uses timestamp)
         const safeDateStr = d.timestamp.replace(" ", "T");
         const currentTime = new Date(safeDateStr).getTime();
         
@@ -255,7 +253,6 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
 
     const total = data.length;
 
-    // 4. Statistics
     const getStats = (arr) => {
         if (arr.length === 0) return { min: 0, max: 0, avg: 0, std: 0 };
         const min = Math.min(...arr);
@@ -270,36 +267,32 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
     const cStats = getStats(cuartoVals);
     const lStats = getStats(localVals);
 
-    // 5. Render KPIs
     document.getElementById("stat-total-samples").textContent = total;
-    // Simplified uptime
     document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; 
     document.getElementById("stat-outages-count").textContent = outages.length;
     
-    // Averages with dynamic UNIT
     document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + unit;
     document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + unit;
     document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + unit;
 
-    // 6. Detailed table
     const tbody = document.getElementById("stats-minmax-body");
     tbody.innerHTML = `
         <tr class="border-b border-white/5 hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div>Sala</td>
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div>Living</td>
             <td class="text-right font-mono text-slate-300">${sStats.min.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-slate-300">${sStats.max.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-emerald-400 font-bold">${sStats.avg.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-xs text-slate-500">±${sStats.std.toFixed(2)}</td>
         </tr>
         <tr class="border-b border-white/5 hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500"></div>Cuarto</td>
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500"></div>Bedroom</td>
             <td class="text-right font-mono text-slate-300">${cStats.min.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-slate-300">${cStats.max.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-cyan-400 font-bold">${cStats.avg.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-xs text-slate-500">±${cStats.std.toFixed(2)}</td>
         </tr>
         <tr class="hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-amber-500"></div>Exterior</td>
+            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-amber-500"></div>Outdoor</td>
             <td class="text-right font-mono text-slate-300">${lStats.min.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-slate-300">${lStats.max.toFixed(1)}${unit}</td>
             <td class="text-right font-mono text-amber-400 font-bold">${lStats.avg.toFixed(1)}${unit}</td>
@@ -307,12 +300,11 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
         </tr>
     `;
 
-    // 7. Outages list
     const list = document.getElementById("outages-list");
     if (outages.length === 0) {
         list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">
             <i data-lucide="check-circle" class="w-4 h-4 mx-auto mb-1"></i>
-            Conexión Estable
+            Stable Connection
         </li>`;
     } else {
         list.innerHTML = outages.map(o => `
@@ -330,11 +322,10 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // 8. Bar chart with correct label
-    renderAnalyticsBarChart(sStats, cStats, lStats, isTemp ? "Temperatura" : "Humedad");
+    renderAnalyticsBarChart(sStats, cStats, lStats, isTemp ? "Temperature" : "Humidity");
 };
 
-// Comparative bar chart
+// Bar chart
 const renderAnalyticsBarChart = (s, c, l, labelType) => {
     const ctx = document.getElementById("analytics-chart").getContext("2d");
     
@@ -343,22 +334,22 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
     analyticsChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Sala', 'Cuarto', 'Exterior'],
+            labels: ['Living', 'Bedroom', 'Outdoor'],
             datasets: [
                 {
-                    label: 'Mín',
+                    label: 'Min',
                     data: [s.min, c.min, l.min],
                     backgroundColor: '#94a3b8',
                     borderRadius: 4,
                 },
                 {
-                    label: 'Prom',
+                    label: 'Avg',
                     data: [s.avg, c.avg, l.avg],
                     backgroundColor: ['#10b981', '#06b6d4', '#fbbf24'],
                     borderRadius: 4,
                 },
                 {
-                    label: 'Máx',
+                    label: 'Max',
                     data: [s.max, c.max, l.max],
                     backgroundColor: '#cbd5e1',
                     borderRadius: 4,
@@ -373,7 +364,7 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y + (labelType === "Temperatura" ? "°C" : "%");
+                            return context.dataset.label + ': ' + context.parsed.y + (labelType === "Temperature" ? "°C" : "%");
                         }
                     }
                 }
@@ -391,4 +382,94 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
             }
         }
     });
+};
+
+/**
+ * =========================================================================
+ * NEW UI FUNCTIONS: SENSOR MGMT & AUTH
+ * =========================================================================
+ */
+
+export const toggleAuthModal = (show) => {
+    if (show) {
+        authModal.classList.remove('hidden');
+    } else {
+        authModal.classList.add('hidden');
+    }
+};
+
+export const updateAuthButtonState = (isLoggedIn) => {
+    const span = document.getElementById("auth-btn-text");
+    if (isLoggedIn) {
+        span.textContent = "My Profile";
+        btnAuthToggle.classList.add("bg-cyan-600", "border-cyan-400");
+    } else {
+        span.textContent = "Sign In";
+        btnAuthToggle.classList.remove("bg-cyan-600", "border-cyan-400");
+    }
+};
+
+// Generate UUID-like token
+const generateToken = () => {
+    return 'esp32_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+};
+
+// Render Sensor List
+export const renderSensorList = () => {
+    if (!sensorListContainer) return;
+    
+    sensorListContainer.innerHTML = ""; 
+
+    if (userSensors.length === 0) {
+        sensorListContainer.innerHTML = `<div class="text-center p-8 text-slate-500 italic">No sensors configured. Add one to start.</div>`;
+        return;
+    }
+
+    userSensors.forEach(sensor => {
+        const row = document.createElement('div');
+        row.className = "bg-slate-800/50 border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between group hover:border-cyan-500/30 transition-all mb-3";
+        
+        row.innerHTML = `
+            <div class="flex items-center gap-4 w-full md:w-auto mb-4 md:mb-0">
+                <div class="bg-slate-700 p-3 rounded-lg">
+                    <i data-lucide="cpu" class="w-6 h-6 text-cyan-400"></i>
+                </div>
+                <div class="flex-1">
+                    <input type="text" value="${sensor.name}" class="bg-transparent border-b border-transparent hover:border-slate-500 focus:border-cyan-500 text-white font-bold focus:outline-none transition-colors w-full" placeholder="Sensor Name">
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 uppercase">${sensor.status}</span>
+                        <input type="text" value="${sensor.location}" class="bg-transparent text-xs text-slate-500 font-mono focus:text-white focus:outline-none w-24" placeholder="loc_id">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                <div class="flex flex-col items-end mr-4">
+                    <label class="text-[10px] text-slate-400 uppercase font-bold mb-1">Auth Token</label>
+                    <div class="flex items-center gap-2 group/token cursor-pointer" onclick="navigator.clipboard.writeText('${sensor.token}')">
+                        <code class="bg-slate-900 px-2 py-1 rounded text-xs text-slate-300 font-mono border border-white/5 group-hover/token:text-cyan-300 transition-colors">
+                            ${sensor.token.substring(0, 12)}...
+                        </code>
+                        <i data-lucide="copy" class="w-3 h-3 text-slate-500 group-hover/token:text-cyan-400"></i>
+                    </div>
+                </div>
+                <button class="btn-delete-sensor p-2 text-slate-400 hover:text-rose-400 transition-colors border border-transparent hover:border-rose-500/20 hover:bg-rose-500/10 rounded-lg" data-id="${sensor.id}">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        `;
+        sensorListContainer.appendChild(row);
+    });
+
+    // Delete Logic
+    document.querySelectorAll('.btn-delete-sensor').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = parseInt(e.currentTarget.dataset.id);
+            // Visual removal
+            e.currentTarget.closest('div.bg-slate-800\\/50').remove();
+            // In real app, remove from array/db
+        });
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 };

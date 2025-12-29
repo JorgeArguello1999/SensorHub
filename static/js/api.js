@@ -12,7 +12,7 @@ try {
       app = firebase.initializeApp(firebaseConfig);
   }
 } catch (e) {
-  console.error("Error al inicializar Firebase.", e);
+  console.error("Error initializing Firebase.", e);
 }
 
 export const db = app ? app.database() : null;
@@ -23,7 +23,7 @@ export const fetchOpenWeatherMapData = async () => {
 
   try {
     const response = await fetch(OPENWEATHER_URL);
-    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
     
     const data = await response.json();
     
@@ -37,7 +37,7 @@ export const fetchOpenWeatherMapData = async () => {
 
   } catch (error) {
     console.error("API Fetch Error:", error);
-    setError(`Error conectando a API Flask: ${error.message}`);
+    setError(`Error connecting to Flask API: ${error.message}`);
     return null;
   }
 };
@@ -50,15 +50,15 @@ export const fetchHourlyHistory = async (hours) => {
     const url = `/api/history?hours=${hours}`;
     const response = await fetch(url);
 
-    if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
     const json = await response.json();
 
-    if (!json.success) throw new Error("La API respondió con success: false");
+    if (!json.success) throw new Error("API responded with success: false");
     return json.data;
 
   } catch (error) {
     console.error("Error fetching history:", error);
-    setError(`Error cargando historial: ${error.message}`);
+    setError(`Error loading history: ${error.message}`);
     return [];
   }
 };
@@ -71,15 +71,15 @@ export const fetchRangeHistory = async (start, end) => {
       const url = `/api/history?start=${start}&end=${end}`; 
       const response = await fetch(url);
   
-      if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+      if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       const json = await response.json();
   
-      if (!json.success) throw new Error("La API respondió con success: false");
+      if (!json.success) throw new Error("API responded with success: false");
       return json.data;
   
     } catch (error) {
       console.error("Error fetching range history:", error);
-      setError(`Error cargando rango: ${error.message}`);
+      setError(`Error loading range: ${error.message}`);
       return [];
     }
   };
