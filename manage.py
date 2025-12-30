@@ -6,7 +6,7 @@ from flask import Flask
 import os
 
 # Import database
-from models.db import _db as db_client
+from models.db import init_db
 
 # Import routes
 from routers.stream import stream_routes
@@ -24,13 +24,11 @@ app.register_blueprint(api_routes)
 app.register_blueprint(stream_routes)
 
 if __name__ == '__main__':
-    # Verify DB before starting
-    if db_client is None:
-        print("❌ Firebase not initialized. Check your credentials.")
-    else:
-        # START THE WORKER IN THE BACKGROUND
-        # This thread will listen to the ESP32 and handle the data
-        start_sensor_worker()
+    # Initialize SQLite DB
+    init_db()
+
+    # START THE WORKER IN THE BACKGROUND
+    start_sensor_worker()
     
     print("🚀 Web Server starting at http://127.0.0.1:5000")
     

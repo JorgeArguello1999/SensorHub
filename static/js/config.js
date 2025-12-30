@@ -3,9 +3,11 @@
 // ----------------------------------------------------------------------
 // FIREBASE CONFIGURATION
 // ----------------------------------------------------------------------
-export const firebaseConfig = {
-  databaseURL: "https://esp32-firebase-69994-default-rtdb.firebaseio.com/",
-};
+// ----------------------------------------------------------------------
+// FIREBASE CONFIGURATION REMOVED - Using Redis Backend
+// ----------------------------------------------------------------------
+// export const firebaseConfig = { ... }; // Removed
+
 
 // ----------------------------------------------------------------------
 // LOCAL API CONFIG (FLASK)
