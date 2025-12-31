@@ -1,22 +1,10 @@
 // api.js
 import {
-  firebaseConfig,
   OPENWEATHER_URL,
   realtimeData,
 } from "./config.js"; 
 import { setError } from "./utils.js"; 
 
-let app;
-try {
-  if (typeof firebase !== 'undefined') {
-      app = firebase.initializeApp(firebaseConfig);
-  }
-} catch (e) {
-  console.error("Error initializing Firebase.", e);
-}
-
-export const db = app ? app.database() : null;
-export const dataRef = db ? db.ref("/") : null;
 
 export const fetchOpenWeatherMapData = async () => {
   if (!OPENWEATHER_URL) return null;

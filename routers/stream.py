@@ -1,29 +1,35 @@
 from flask import Blueprint, Response, stream_with_context
+from models.db import redis_client
 import json
-from services.broadcaster import register_client, remove_client
 
 stream_routes = Blueprint('stream', __name__, url_prefix='')
 
 @stream_routes.route('/stream-data')
 def stream_data():
     """
-    SSE endpoint that keeps the connection open with the browser.
-    Receives data from in-memory broadcaster (services/broadcaster.py).
+    SSE endpoint using Redis Pub/Sub.
     """
     def generate():
-        q = register_client()
+        if not redis_client:
+            return 
+            
+        pubsub = redis_client.pubsub()
+        pubsub.subscribe('sensors:stream')
+        
         try:
-            while True:
-                try:
-                    # Wait for new data in the queue (timeout used as keep-alive)
-                    data = q.get(timeout=10)
-                    yield f"data: {json.dumps(data)}\n\n"
-                except Exception:
-                    # Send ping to keep the connection alive
-                    yield ": keep-alive\n\n"
+            for message in pubsub.listen():
+                if message['type'] == 'message':
+                    # message['data'] is the JSON string payload
+                    yield f"data: {message['data']}\n\n"
+                
+                # We could add a ping here if needed, but Redis keepalive usually works.
+                # Or we can use a separate thread/mechanism to send pings if the connection is idle.
+                # For simplicity, we rely on Redis messages. If silent for too long, browser reconnects.
         except GeneratorExit:
-            print("🔌 Cliente web desconectado.")
-        finally:
-            remove_client(q)
+            print("🔌 Web client disconnected.")
+            pubsub.unsubscribe()
+        except Exception as e:
+            print(f"❌ Error in stream: {e}")
+            pubsub.unsubscribe()
 
     return Response(stream_with_context(generate()), mimetype='text/event-stream')

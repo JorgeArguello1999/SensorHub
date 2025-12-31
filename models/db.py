@@ -1,27 +1,33 @@
 import os
-import firebase_admin
-from firebase_admin import credentials, firestore
+import redis
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models.sql_models import Base
 
-FIREBASE_CREDENTIALS = os.getenv('FIREBASE_CREDENTIALS')  # path to service account JSON (optional)
-
-_db = None
+# Redis Configuration
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_DB = int(os.getenv('REDIS_DB', 0))
 
 try:
-    if not firebase_admin._apps:
-        if FIREBASE_CREDENTIALS:
-            cred = credentials.Certificate(FIREBASE_CREDENTIALS)
-            firebase_admin.initialize_app(cred)
-        else:
-            # fallback to the file used previously; keep compatibility
-            try:
-                cred = credentials.Certificate(".venv/esp32_firebase.json")
-                firebase_admin.initialize_app(cred)
-            except Exception:
-                # try default environment credentials (GOOGLE_APPLICATION_CREDENTIALS)
-                firebase_admin.initialize_app()
-    _db = firestore.client()
-    print("✅ Firebase connected successfully.")
+    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
+    redis_client.ping() # Test connection
+    print("✅ Redis connected successfully.")
 except Exception as e:
-    _db = None
-    print(f"❌ Critical error initializing Firebase: {e}")
-    print("   Check FIREBASE_CREDENTIALS or GOOGLE_APPLICATION_CREDENTIALS environment variables.")
+    redis_client = None
+    print(f"❌ Error connecting to Redis: {e}")
+
+# SQLite Configuration
+DB_PATH = "sensors.db"
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def init_db():
+    """Create tables if they don't exist"""
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ SQLite tables created/verified.")
+    except Exception as e:
+        print(f"❌ Error initializing SQLite: {e}")
