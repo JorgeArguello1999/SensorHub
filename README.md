@@ -2,7 +2,8 @@
 
 ![Project Status](https://img.shields.io/badge/Status-Active-success)
 ![Python](https://img.shields.io/badge/Backend-Flask-blue)
-![Firebase](https://img.shields.io/badge/Database-Firebase-orange)
+![Redis](https://img.shields.io/badge/Realtime-Redis-red)
+![DB](https://img.shields.io/badge/Storage-SQLite%20%7C%20PostgreSQL-003B57)
 ![Javascript](https://img.shields.io/badge/Frontend-ES6%2B-yellow)
 ![Tailwind](https://img.shields.io/badge/Style-TailwindCSS-38b2ac)
 
@@ -13,61 +14,75 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
 ## ✨ Key Features
 
 ### 📡 Real-Time Monitoring
-- **Live Data Streaming:** Uses **Server-Sent Events (SSE)** for instant updates without page reloads.
+- **Live Data Streaming:** High-performance streaming using **Redis Pub/Sub** and **Server-Sent Events (SSE)**.
 - **External API Integration:** Connects with OpenWeatherMap to compare indoor vs. outdoor conditions.
 - **Multi-Zone Support:** Seamlessly monitors multiple nodes (Living Room, Bedroom, Outdoor).
 
 ### 📊 Advanced Analytics & BI
 - **System Health (Uptime):** Automatic detection of power outages or sensor disconnections (gaps > 20 min).
 - **Thermal Stability:** Calculates Standard Deviation (SD) to evaluate thermal insulation efficiency.
-- **Flexible History:** Filter data by "Last N Hours" or specific date ranges using custom Datetime Pickers.
+- **Flexible History:** Persistent storage using **SQLAlchemy** (Support for SQLite or PostgreSQL) with fast filtering by range or "Last N Hours".
 - **Visualization:** Interactive comparative charts (Chart.js) and Min/Max/Avg data tables.
 
 ### 🤖 AI & Predictions
 - **Prediction Engine:** Client-side Linear Regression implementation to forecast short-term temperature trends (Morning, Afternoon, Night).
 
-### ⚙️ Sensor Management (Admin)
+### ⚙️ Sensor Management
 - **Management Interface:** Dynamic UI to add, edit, or remove sensors on the fly.
-- **Security:** Generation of unique authentication tokens for each ESP32 node.
 - **Authentication:** Modern Sign In / Sign Up interface for secure access.
 
 ## 🛠️ Tech Stack
 
 * **Backend:** Python (Flask), Flask-Blueprints.
-* **Database:** Google Firebase (Firestore & Realtime Database).
+* **Real-time Engine:** Redis (Key-Value & Pub/Sub).
+* **Storage:** SQLite (default) or PostgreSQL. Configurable via `DATABASE_URL`.
 * **Frontend:** HTML5, Vanilla JavaScript (ES Modules), TailwindCSS.
-* **Libraries:** Chart.js (Data Visualization), Lucide (Icons).
-* **Hardware (Client):** Compatible with ESP32/ESP8266 nodes.
+* **Hardware (Client):** Compatible with ESP32/ESP8266 nodes (HTTP POST).
 
 ## 🚀 Installation & Setup
 
+### Prerequisites
+- **Redis Server** installed and running (`redis-server`).
+- **Python 3.13+**
+
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/your-username/sensorhub-pro.git](https://github.com/your-username/sensorhub-pro.git)
+    git clone https://github.com/your-username/sensorhub-pro.git
     cd sensorhub-pro
     ```
 
-2.  **Set up virtual environment and install dependencies:**
+2.  **Install dependencies using `uv`:**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # Windows: venv\Scripts\activate
-    pip install -r requirements.txt
+    uv sync
     ```
 
 3.  **Environment Configuration:**
-    Create a `.env` file or configure your variables:
+    Create a `.env` file (see `.env.example` if available):
     * `OPENWEATHER_API_KEY`: Your OpenWeatherMap API Key.
-    * Firebase Credentials (`serviceAccountKey.json`).
+    * `REDIS_HOST`: localhost (default)
+    * `REDIS_PORT`: 6379 (default)
+    * `DATABASE_URL`: (Optional) Connection string for PostgreSQL or SQLite. Defaults to `sqlite:///sensors.db`.
 
 4.  **Run the application:**
     ```bash
-    python index.py
+    uv run manage.py
     ```
     Visit `http://localhost:5000` in your browser.
 
+5.  **Run ESP32 Simulator (Optional):**
+    If you don't have physical sensors yet, you can send simulated data:
+    ```bash
+    uv run test/esp32_simulator.py
+    ```
+
 ## 📸 Screenshots
 
-*(Add screenshots of your "Live", "Analytics", and "Sensor Management" tabs here)*
+### Dashboard & Analytics
+![Screenshot 1](static/images/screenshot_1.png)
+
+
+### Sensor Management & History
+![Screenshot 2](static/images/screenshot_2.png)
 
 ---
 Built with ❤️ by JorgeArguello
