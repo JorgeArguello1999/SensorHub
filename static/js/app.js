@@ -79,6 +79,7 @@ const fetchSensors = async () => {
         globalSensors.splice(0, globalSensors.length, ...data); 
         
         renderDynamicDashboard(globalSensors);
+        renderConfigSensors(globalSensors); // Update config list if open
         initComparisonChart(activeTab, globalSensors);
         
         // Init sensorDataMap
