@@ -15,8 +15,7 @@ import {
   // New imports
   userSensors,
   sensorListContainer,
-  authModal,
-  btnAuthToggle
+
 } from "./config.js";
 
 // Variables for chart instances
@@ -390,24 +389,9 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
  * =========================================================================
  */
 
-export const toggleAuthModal = (show) => {
-    if (show) {
-        authModal.classList.remove('hidden');
-    } else {
-        authModal.classList.add('hidden');
-    }
-};
 
-export const updateAuthButtonState = (isLoggedIn) => {
-    const span = document.getElementById("auth-btn-text");
-    if (isLoggedIn) {
-        span.textContent = "My Profile";
-        btnAuthToggle.classList.add("bg-cyan-600", "border-cyan-400");
-    } else {
-        span.textContent = "Sign In";
-        btnAuthToggle.classList.remove("bg-cyan-600", "border-cyan-400");
-    }
-};
+
+
 
 // Generate UUID-like token
 const generateToken = () => {

@@ -31,7 +31,7 @@ export let comparisonChartInstance = null;
 export let currentChartDataType = "temperatura"; 
 
 // --- USER STATE (New) ---
-export let isUserLoggedIn = false;
+
 export let userSensors = [
     { id: 1, name: "Living Room Node", location: "sala", token: "esp32_token_sala_01", status: "active" },
     { id: 2, name: "Bedroom Node", location: "cuarto", token: "esp32_token_cuarto_02", status: "active" }
@@ -73,11 +73,7 @@ export let dashboardView = null; // New Main View
 export let sensorManagementView = null; // New Management View
 
 // Auth & Sensors (New)
-export let btnAuthToggle = null;
-export let authModal = null;
-export let btnCloseAuth = null;
-export let authForm = null;
-export let btnSwitchAuth = null; 
+
 export let sensorListContainer = null;
 export let btnAddSensor = null;
 
@@ -120,11 +116,7 @@ export const initDOMRefs = () => {
   sensorManagementView = document.getElementById("sensor-management-view");
 
   // New Auth Refs
-  btnAuthToggle = document.getElementById("btn-auth-toggle");
-  authModal = document.getElementById("auth-modal");
-  btnCloseAuth = document.getElementById("btn-close-auth");
-  authForm = document.getElementById("auth-form");
-  btnSwitchAuth = document.getElementById("btn-switch-auth");
+
   
   // New Sensor Mgmt Refs
   sensorListContainer = document.getElementById("sensor-list-container");

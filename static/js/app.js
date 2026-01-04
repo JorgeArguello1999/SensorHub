@@ -15,14 +15,10 @@ import {
   dashboardView, 
   sensorManagementView,
   // Auth & Sensors
-  btnAuthToggle, 
-  authModal, 
-  btnCloseAuth, 
-  authForm, 
-  btnSwitchAuth,
+
   btnAddSensor, 
   userSensors, 
-  isUserLoggedIn,
+
   // Inputs
   historyHoursInput,
   historyStartInput,
@@ -45,15 +41,14 @@ import {
   renderAnalytics,
   // New UI Functions
   renderSensorList, 
-  toggleAuthModal, 
-  updateAuthButtonState
+
 } from "./ui.js";
 
 // LOCAL STATE
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
 let cachedHistoryData = []; 
-let isLoginMode = true; // Toggle between Sign In / Sign Up
+
 
 const formatDateTimeInput = (val) => {
     if (!val) return null;
@@ -289,42 +284,7 @@ const setupEventListeners = () => {
   }
 
   // --- NEW AUTH LISTENERS ---
-  if (btnAuthToggle) {
-    btnAuthToggle.addEventListener('click', () => {
-        // If "My Profile" (logged in), go to Sensor Management. Else Open Modal.
-        const btnText = document.getElementById("auth-btn-text").textContent;
-        if (btnText === "My Profile") {
-            toggleSensorManagementView(true);
-        } else {
-            toggleAuthModal(true);
-        }
-    });
-  }
 
-  if (btnCloseAuth) {
-    btnCloseAuth.addEventListener('click', () => toggleAuthModal(false));
-  }
-
-  if (btnSwitchAuth) {
-    btnSwitchAuth.addEventListener('click', (e) => {
-        e.preventDefault();
-        isLoginMode = !isLoginMode;
-        document.getElementById("auth-title").textContent = isLoginMode ? "Welcome Back" : "Create Account";
-        document.getElementById("auth-subtitle").textContent = isLoginMode ? "Sign in to manage your sensors" : "Get started with your IoT sensors";
-        document.getElementById("auth-submit-text").textContent = isLoginMode ? "Sign In" : "Sign Up";
-        btnSwitchAuth.textContent = isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In";
-    });
-  }
-
-  if (authForm) {
-    authForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        // Mock Login Success
-        toggleAuthModal(false);
-        updateAuthButtonState(true); // Switch button to "My Profile"
-        toggleSensorManagementView(true); // Go straight to management
-    });
-  }
 
   // --- SENSOR MGMT LISTENERS ---
   if (btnAddSensor) {
