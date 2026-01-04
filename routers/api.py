@@ -221,5 +221,5 @@ def get_sensor_history():
         })
 
     except Exception as e:
-        print(f"❌ Error obteniendo historial: {e}")
+        print(f"❌ Error with history: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
