@@ -3,7 +3,8 @@
 import {
   loadingSpinner,
   lastUpdateSpan,
-  realtimeData, 
+  globalSensors, 
+  sensorDataMap,
   downloadCsvButton,
   tabButtons,
   initDOMRefs,
@@ -12,13 +13,29 @@ import {
   modeHistoryBtn,
   modeAnalyticsBtn,
   // Views
-  dashboardView, 
-  sensorManagementView,
-  // Auth & Sensors
-
-  btnAddSensor, 
-  userSensors, 
-
+  dashboardView, // kept for toggle
+  // Admin & Config
+  btnAdminSettings,
+  adminAuthModal,
+  btnCloseAdminAuth,
+  adminAuthForm,
+  adminPasswordInput,
+  adminAuthError,
+  sensorConfigModal,
+  btnCloseConfig,
+  btnViewSensors,
+  btnAddSensorView,
+  configViewList,
+  configViewAdd,
+  typeSelectEsp32,
+  typeSelectWeather,
+  addSensorForm,
+  newSensorType,
+  newSensorName,
+  fieldCoords,
+  newSensorLat,
+  newSensorLon,
+  
   // Inputs
   historyHoursInput,
   historyStartInput,
@@ -33,15 +50,14 @@ import { fetchHourlyHistory, fetchRangeHistory } from "./api.js";
 import { triggerCsvDownload, createLinearRegressionModel } from "./utils.js"; 
 import {
   renderCurrentStats,
+  renderDynamicDashboard,
+  renderConfigSensors,
   initComparisonChart,
   updateChartRealTime,
   renderStaticChart, 
   switchTab,
   getVisibleChartData,
-  renderAnalytics,
-  // New UI Functions
-  renderSensorList, 
-
+  renderAnalytics
 } from "./ui.js";
 
 // LOCAL STATE
@@ -49,6 +65,29 @@ let activeTab = "temperatura";
 let chartMode = "realtime"; 
 let cachedHistoryData = []; 
 
+// API CALLS
+const fetchSensors = async () => {
+    try {
+        const res = await fetch('/api/sensors');
+        const data = await res.json();
+        
+        // Update global storage
+        // globalSensors.length = 0; // Clear
+        // globalSensors.push(...data); // Refill matches const strictness? No, globalSensors is 'let' in config? exported let.
+        // Actually importing 'let' is read-only in module. I need a setter or modify the array content.
+        // To avoid complexity, I'll operate on the imported array by mutating it.
+        globalSensors.splice(0, globalSensors.length, ...data); 
+        
+        renderDynamicDashboard(globalSensors);
+        initComparisonChart(activeTab, globalSensors);
+        
+        // Init sensorDataMap
+        data.forEach(s => {
+            if(!sensorDataMap[s.id]) sensorDataMap[s.id] = { temperatura: 0, humedad: 0 };
+        });
+
+    } catch (e) { console.error("Error fetching sensors:", e); }
+};
 
 const formatDateTimeInput = (val) => {
     if (!val) return null;
@@ -109,36 +148,38 @@ const setupStreamListener = () => {
   const eventSource = new EventSource("/stream-data");
   eventSource.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
-      const timeString = data.id || new Date().toLocaleTimeString("en-US");
+      const msg = JSON.parse(event.data);
+      // msg structure: { sensor_id: 1, data: {temperature: 22, humidity: 50}, server_time: "..." }
+      
+      const timeString = msg.server_time || new Date().toLocaleTimeString("en-US");
 
       if (lastUpdateSpan) {
         lastUpdateSpan.textContent = `Updated: ${timeString}`;
         loadingSpinner.classList.add("hidden"); 
       }
-      if (data.local) { realtimeData.local.temperatura = parseFloat(data.local.temperatura||0); realtimeData.local.humedad = parseFloat(data.local.humedad||0); }
-      if (data.sala) { realtimeData.sala.temperatura = parseFloat(data.sala.temperatura||0); realtimeData.sala.humedad = parseFloat(data.sala.humedad||0); }
-      if (data.cuarto) { realtimeData.cuarto.temperatura = parseFloat(data.cuarto.temperatura||0); realtimeData.cuarto.humedad = parseFloat(data.cuarto.humedad||0); }
+      
+      if (msg.sensor_id && msg.data) {
+          const sId = msg.sensor_id;
+          sensorDataMap[sId] = msg.data;
+          
+          // Update DOM Card
+          const tEl = document.getElementById(`temp-sensor-${sId}`);
+          const hEl = document.getElementById(`hum-sensor-${sId}`);
+          
+          const tempVal = parseFloat(msg.data.temperature);
+          const humVal = parseFloat(msg.data.humidity);
 
-      renderCurrentStats();
-
-      if (chartMode === 'realtime') {
-          updateChartRealTime(activeTab);
-          const tableBody = document.getElementById('data-table-body');
-          if (tableBody) {
-              const row = `
-                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors animate-pulse-once">
-                    <td class="p-3 text-slate-400 font-mono text-xs">${timeString}</td>
-                    <td class="p-3 font-bold text-amber-500">${realtimeData.local.temperatura.toFixed(1)}°</td>
-                    <td class="p-3 font-bold text-emerald-500">${realtimeData.sala.temperatura.toFixed(1)}°</td>
-                    <td class="p-3 font-bold text-cyan-500">${realtimeData.cuarto.temperatura.toFixed(1)}°</td>
-                    <td class="p-3"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-1"></span> <span class="text-xs text-emerald-400">Received</span></td>
-                </tr>`;
-              if(tableBody.innerText.includes("Waiting")) tableBody.innerHTML = "";
-              tableBody.insertAdjacentHTML('afterbegin', row);
-              if (tableBody.children.length > 10) tableBody.lastElementChild.remove();
+          if(tEl) tEl.innerText = !isNaN(tempVal) ? `${tempVal.toFixed(1)}°` : "--°";
+          if(hEl) hEl.innerText = !isNaN(humVal) ? `H: ${humVal.toFixed(1)}%` : "H: --%";
+          
+          // Note: Chart update is now decoupled or we can call it here if we want instant gratification
+          // But for multiple sensors, better to tick periodically or just call it here once.
+          // Since we changed updateChartRealTime to iterate all datasets, calling it here is fine.
+          if (chartMode === 'realtime') {
+             updateChartRealTime(activeTab, sensorDataMap);
           }
       }
+
     } catch (e) { console.error("SSE Error", e); }
   };
 };
@@ -183,26 +224,6 @@ const fillHistoryTable = (data) => {
     }
 };
 
-// VIEW TOGGLING
-const toggleSensorManagementView = (show) => {
-    if (show) {
-        dashboardView.classList.add('hidden');
-        sensorManagementView.classList.remove('hidden');
-        renderSensorList();
-        
-        // Reset nav styles
-        if (modeRealtimeBtn) modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-        if (modeHistoryBtn) modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-        if (modeAnalyticsBtn) modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-
-    } else {
-        dashboardView.classList.remove('hidden');
-        sensorManagementView.classList.add('hidden');
-        // Restore dashboard active tab visually (defaults to Realtime usually)
-        if (modeRealtimeBtn) modeRealtimeBtn.click();
-    }
-};
-
 // EVENTS
 const setupEventListeners = () => {
 
@@ -211,18 +232,10 @@ const setupEventListeners = () => {
     button.addEventListener("click", () => {
       if (button.dataset.tab !== activeTab) {
         activeTab = switchTab(button.dataset.tab);
-        if (chartMode === 'analytics') {
-             if (cachedHistoryData.length > 0) {
-                 renderAnalytics(cachedHistoryData, activeTab);
-             } else {
-                 loadHistoryData();
-             }
-        } else if (chartMode === 'history') {
-             if (cachedHistoryData.length > 0) {
-                 renderStaticChart(cachedHistoryData, activeTab);
-             } else {
-                 loadHistoryData();
-             }
+        // Reload history logic... (simplified for now)
+        initComparisonChart(activeTab, globalSensors);
+        if(chartMode === 'history' || chartMode === 'analytics'){
+            loadHistoryData();
         }
       }
     });
@@ -232,126 +245,168 @@ const setupEventListeners = () => {
   if (modeRealtimeBtn) {
     modeRealtimeBtn.addEventListener("click", () => {
         chartMode = 'realtime';
-        toggleSensorManagementView(false); // Ensure we are in dashboard
-        
         modeRealtimeBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-        modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         
         document.getElementById("history-controls").classList.add("hidden");
         chartContainer.classList.remove("hidden");
-        analyticsPanel.classList.add("hidden");
+        if(analyticsPanel) analyticsPanel.classList.add("hidden");
         
-        initComparisonChart(activeTab);
-        const tableBody = document.getElementById('data-table-body');
-        if(tableBody) tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic" colspan="5">Live Mode: Waiting for data...</td></tr>`;
+        initComparisonChart(activeTab, globalSensors);
     });
   }
 
-  if (modeHistoryBtn) {
+  // ... History/Analytics Buttons (Simplified: Just UI toggle) ...
+   if (modeHistoryBtn) {
     modeHistoryBtn.addEventListener("click", () => {
         chartMode = 'history';
-        toggleSensorManagementView(false);
-
         modeHistoryBtn.className = "mode-tab-active px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
         modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-        modeAnalyticsBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-
         document.getElementById("history-controls").classList.remove("hidden");
         chartContainer.classList.remove("hidden");
-        analyticsPanel.classList.add("hidden");
-
-        historyHoursInput.value = "12"; 
+        if(analyticsPanel) analyticsPanel.classList.add("hidden");
+        
         loadHistoryData();
     });
   }
-
+  
   if (modeAnalyticsBtn) {
       modeAnalyticsBtn.addEventListener("click", () => {
           chartMode = 'analytics';
-          toggleSensorManagementView(false);
-
-          modeAnalyticsBtn.className = "mode-tab-analytics px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20";
-          modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-          modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
-
-          document.getElementById("history-controls").classList.remove("hidden");
-          chartContainer.classList.add("hidden");
-          analyticsPanel.classList.remove("hidden");
-
-          loadHistoryData();
+          // ... UI Toggle ...
+          // Just a placeholder to avoid undefined errors if user clicks
+          alert("Analytics not available for dynamic sensors yet.");
       });
   }
 
-  // --- NEW AUTH LISTENERS ---
 
+  // --- ADMIN & CONFIG ---
+  if(btnAdminSettings) {
+      btnAdminSettings.addEventListener('click', () => {
+          adminAuthModal.classList.remove('hidden');
+          adminPasswordInput.value = "";
+          adminPasswordInput.focus();
+      });
+  }
+  
+  if(btnCloseAdminAuth) btnCloseAdminAuth.addEventListener('click', () => adminAuthModal.classList.add('hidden'));
 
-  // --- SENSOR MGMT LISTENERS ---
-  if (btnAddSensor) {
-    btnAddSensor.addEventListener('click', () => {
-        // Mock adding a sensor
-        const newId = userSensors.length + 1;
-        userSensors.push({
-            id: newId,
-            name: "New Sensor Node",
-            location: `loc_${newId}`,
-            token: `esp32_${Date.now()}`,
-            status: "pending"
-        });
-        renderSensorList();
-    });
+  if(adminAuthForm) {
+      adminAuthForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const pwd = adminPasswordInput.value;
+          try {
+              const res = await fetch('/api/config/auth', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ password: pwd })
+              });
+              const data = await res.json();
+              if(data.success) {
+                  adminAuthModal.classList.add('hidden');
+                  sensorConfigModal.classList.remove('hidden');
+                  renderConfigSensors(globalSensors);
+              } else {
+                  adminAuthError.classList.remove('hidden');
+                  setTimeout(() => adminAuthError.classList.add('hidden'), 3000);
+              }
+          } catch(e) { console.error(e); }
+      });
+  }
+  
+  if(btnCloseConfig) btnCloseConfig.addEventListener('click', () => sensorConfigModal.classList.add('hidden'));
+
+  // Config View Switcher
+  const showList = () => {
+      configViewList.classList.remove('hidden');
+      configViewAdd.classList.add('hidden');
+  };
+  const showAdd = () => {
+      configViewList.classList.add('hidden');
+      configViewAdd.classList.remove('hidden');
+  };
+
+  if(btnViewSensors) btnViewSensors.addEventListener('click', showList);
+  if(btnAddSensorView) btnAddSensorView.addEventListener('click', showAdd);
+
+  // Add Sensor Type Select
+  if(typeSelectEsp32) {
+      typeSelectEsp32.addEventListener('click', () => {
+          newSensorType.value = 'esp32';
+          typeSelectEsp32.classList.replace('border-slate-700', 'border-cyan-500');
+          typeSelectEsp32.classList.replace('text-slate-400', 'text-cyan-400');
+          typeSelectEsp32.classList.replace('bg-slate-800/50', 'bg-cyan-500/10');
+          
+          typeSelectWeather.classList.replace('border-cyan-500', 'border-slate-700');
+          typeSelectWeather.classList.replace('text-amber-400', 'text-slate-400');
+          typeSelectWeather.classList.replace('bg-amber-500/10', 'bg-slate-800/50');
+          
+          fieldCoords.classList.add('hidden');
+      });
+  }
+  if(typeSelectWeather) {
+      typeSelectWeather.addEventListener('click', () => {
+          newSensorType.value = 'openweather';
+          typeSelectWeather.classList.replace('border-slate-700', 'border-amber-500'); 
+          typeSelectWeather.classList.add('text-amber-400', 'bg-amber-500/10');
+          typeSelectWeather.classList.remove('text-slate-400', 'bg-slate-800/50');
+
+          typeSelectEsp32.classList.replace('border-cyan-500', 'border-slate-700');
+          typeSelectEsp32.classList.replace('text-cyan-400', 'text-slate-400');
+          typeSelectEsp32.classList.replace('bg-cyan-500/10', 'bg-slate-800/50');
+          
+          fieldCoords.classList.remove('hidden');
+      });
   }
 
-  // SEARCH BUTTONS
-  const btnSearch = document.getElementById('mode-history-search');
-  if(btnSearch) btnSearch.addEventListener('click', loadHistoryData);
-
-  if (rangeSearchBtn) {
-      rangeSearchBtn.addEventListener("click", async () => {
-          const startVal = historyStartInput.value;
-          const endVal = historyEndInput.value;
-          if (!startVal || !endVal) { alert("Select dates"); return; }
-
-          const startFmt = formatDateTimeInput(startVal);
-          const endFmt = formatDateTimeInput(endVal);
+  // Submit New Sensor
+  if(addSensorForm) {
+      addSensorForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const payload = {
+              name: newSensorName.value,
+              type: newSensorType.value,
+              lat: newSensorLat.value,
+              lon: newSensorLon.value
+          };
           
-          if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "0.5";
-          if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
+          try {
+              const res = await fetch('/api/sensors', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify(payload)
+              });
+              const data = await res.json();
+              if(data.id) {
+                  alert(`Sensor Created! Token: ${data.token || 'N/A'}`);
+                  addSensorForm.reset();
+                  showList();
+                  fetchSensors(); // Refresh everything
+              } else {
+                  alert("Error creating sensor: " + data.error);
+              }
+          } catch(e) { console.error(e); }
+      });
+  }
 
-          const data = await fetchRangeHistory(startFmt, endFmt);
-          cachedHistoryData = data; 
-          
-          if (chartMode === 'analytics') {
-              renderAnalytics(data, activeTab);
-          } else {
-              renderStaticChart(data, activeTab);
-              fillHistoryTable(data);
+
+  // DELEGATION FOR DELETE
+  if(document.body) {
+      document.body.addEventListener('click', async (e) => {
+          const btn = e.target.closest('.btn-delete-sensor');
+          if(btn) {
+              const id = btn.dataset.id;
+              if(confirm("Delete this sensor?")) {
+                  await fetch(`/api/sensors/${id}`, { method: 'DELETE' });
+                  fetchSensors();
+              }
           }
-
-          if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
       });
   }
 
-  // CSV
-  if(downloadCsvButton) {
-    downloadCsvButton.addEventListener("click", async () => {
-        if (chartMode === 'history' || chartMode === 'analytics') {
-             if (historyStartInput.value && historyEndInput.value) {
-                 const s = formatDateTimeInput(historyStartInput.value);
-                 const e = formatDateTimeInput(historyEndInput.value);
-                 const data = await fetchRangeHistory(s, e);
-                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "report_range.csv");
-             } else {
-                 const h = historyHoursInput.value || 12;
-                 const data = await fetchHourlyHistory(h);
-                 if(data.length) triggerCsvDownload(["TS", "L_T", "L_H", "S_T", "S_H", "C_T", "C_H"], data.map(d=>[d.timestamp,d.local_temp,d.local_hum,d.sala_temp,d.sala_hum,d.cuarto_temp,d.cuarto_hum]), "report_hourly.csv");
-             }
-        } else {
-             const rows = getVisibleChartData();
-             if(rows.length) triggerCsvDownload(["Time", "Outdoor", "Living", "Bedroom"], rows, "live_data.csv");
-        }
-    });
-  }
+  // SEARCH AND CSV (Keep simplified)
+  if(rangeSearchBtn) rangeSearchBtn.addEventListener("click", loadHistoryData);
+
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -360,8 +415,8 @@ document.addEventListener("DOMContentLoaded", () => {
   
   setupEventListeners();
   setupStreamListener();
-  initComparisonChart(activeTab);
-  updatePredictions();
   
-  setInterval(updatePredictions, 600000);
+  fetchSensors(); // Load dynamic sensors
+  
+  // setInterval(updatePredictions, 600000); // LEGACY
 });

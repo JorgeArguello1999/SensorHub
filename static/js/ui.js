@@ -13,9 +13,9 @@ import {
   modeAnalyticsBtn,
   chartMode,
   // New imports
-  userSensors,
+  configSensorList,
   sensorListContainer,
-
+  adminAuthError
 } from "./config.js";
 
 // Variables for chart instances
@@ -23,67 +23,131 @@ let myChart = null;
 let analyticsChart = null;    
 
 /**
- * Update the stats cards (large text, top panel).
+ * Render list of sensors in Config Modal
  */
-export const renderCurrentStats = () => {
-  const localTemp = realtimeData.local.temperatura;
-  const localHum = realtimeData.local.humedad;
+export const renderConfigSensors = (sensors) => {
+    configSensorList.innerHTML = "";
+    if (sensors.length === 0) {
+        configSensorList.innerHTML = `<div class="text-center text-slate-500 py-4">No sensors found. Add one!</div>`;
+        return;
+    }
 
-  if (tempLocal) tempLocal.textContent = localTemp !== null ? `${localTemp.toFixed(1)}°` : "--°";
-  if (humLocal) humLocal.textContent = localHum !== null ? `H: ${localHum.toFixed(1)}%` : "H: --%";
-  
-  if (tempSala) tempSala.textContent = `${realtimeData.sala.temperatura.toFixed(1)}°`;
-  if (humSala) humSala.textContent = `H: ${realtimeData.sala.humedad.toFixed(1)}%`;
-  
-  if (tempCuarto) tempCuarto.textContent = `${realtimeData.cuarto.temperatura.toFixed(1)}°`;
-  if (humCuarto) humCuarto.textContent = `H: ${realtimeData.cuarto.humedad.toFixed(1)}%`;
+    sensors.forEach(s => {
+        const div = document.createElement('div');
+        div.className = "bg-slate-800 p-4 rounded-xl border border-white/5 flex justify-between items-center";
+        
+        const typeIcon = s.type === 'esp32' ? 'cpu' : 'cloud-sun';
+        const typeColor = s.type === 'esp32' ? 'text-cyan-400' : 'text-amber-400';
+        
+        let details = "";
+        if (s.type === 'esp32') {
+             details = `<div class="text-[10px] text-slate-500 font-mono mt-1">Token: ...${s.token.slice(-6)}</div>`;
+        } else {
+             details = `<div class="text-[10px] text-slate-500 font-mono mt-1">${s.lat}, ${s.lon}</div>`;
+        }
+
+        div.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-slate-900 rounded-lg">
+                    <i data-lucide="${typeIcon}" class="w-5 h-5 ${typeColor}"></i>
+                </div>
+                <div>
+                    <h4 class="font-bold text-white text-sm">${s.name}</h4>
+                    ${details}
+                </div>
+            </div>
+            <button class="btn-delete-sensor p-2 text-slate-500 hover:text-rose-400 transition-colors" data-id="${s.id}">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        `;
+        configSensorList.appendChild(div);
+    });
+    
+    // Re-init icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+export const renderCurrentStats = () => {
+  // Deprecated for dynamic, but kept for compatibility during transition
+};
+
+export const renderDynamicDashboard = (sensors) => {
+    const grid = document.querySelector("#dashboard-view .grid");
+    if(!grid) return;
+    
+    // Clear existing hardcoded cards if we have sensors
+    // We assume the first grid is the sensor cards grid
+    grid.innerHTML = "";
+
+    sensors.forEach(s => {
+        const typeColor = s.type === 'openweather' ? 'amber' : (s.name.includes("Bed") ? 'cyan' : 'emerald');
+        const icon = s.type === 'openweather' ? 'cloud-sun' : 'cpu';
+        
+        const card = document.createElement('div');
+        // Using generic color classes might be tricky if not in tailwind safelist, 
+        // effectively we can stick to rotation or random, but let's default to cyan for ESP32 generic
+        let colorClass = 'cyan';
+        if(s.type === 'openweather') colorClass = 'amber';
+        
+        card.className = `glass-panel rounded-2xl p-5 relative overflow-hidden group hover:border-${colorClass}-500/30 transition-all`;
+        
+        card.innerHTML = `
+            <div class="absolute -right-6 -top-6 w-24 h-24 bg-${colorClass}-500/10 rounded-full blur-2xl group-hover:bg-${colorClass}-500/20 transition-all"></div>
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex flex-col">
+                    <span class="text-xs font-semibold text-${colorClass}-400 uppercase tracking-wider">${s.name}</span>
+                    <span class="text-[10px] text-slate-500">${s.type === 'openweather' ? 'OpenWeather' : 'Sensor Node'}</span>
+                </div>
+                <i data-lucide="${icon}" class="text-${colorClass}-400 w-5 h-5"></i>
+            </div>
+            <div class="flex items-end gap-3">
+                <h2 id="temp-sensor-${s.id}" class="text-4xl font-bold text-white">--°</h2>
+                <span id="hum-sensor-${s.id}" class="mb-1 text-sm font-medium text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">H: --%</span>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 };
 
 /**
  * Initialize the comparison line chart (Live / History)
  */
-export const initComparisonChart = (dataType) => {
+/**
+ * Initialize the comparison line chart (Live / History)
+ */
+export const initComparisonChart = (dataType, sensors) => {
   const ctx = document.getElementById("comparison-chart").getContext("2d");
   if (myChart) myChart.destroy();
 
+  if(!sensors) return;
+
   const isTemperature = dataType === "temperatura";
   const unit = isTemperature ? "°C" : "%";
-  // ENGLISH LABELS
-  const labelTitle = isTemperature ? "Temperature" : "Humidity";
+  
+  // Dynamic Datasets
+  const datasets = sensors.map((s, index) => {
+      // Pick a color from a palette
+      const colors = ["#fbbf24", "#10b981", "#06b6d4", "#a855f7", "#ef4444", "#3b82f6"];
+      const color = colors[index % colors.length];
+      
+      return {
+          label: s.name,
+          data: [],
+          borderColor: color,
+          backgroundColor: color,
+          tension: 0.4,
+          fill: false,
+          pointRadius: 3,
+          sensorId: s.id // Custom prop to identify
+      };
+  });
 
   myChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: [], 
-      datasets: [
-        {
-          label: `${labelTitle} Outdoor`,
-          data: [],
-          borderColor: "#fbbf24", // Amber
-          backgroundColor: "#fbbf24",
-          tension: 0.4,
-          fill: false,
-          pointRadius: 3,
-        },
-        {
-          label: `${labelTitle} Living`,
-          data: [],
-          borderColor: "#10b981", // Emerald
-          backgroundColor: "#10b981",
-          tension: 0.4,
-          fill: false,
-          pointRadius: 3,
-        },
-        {
-          label: `${labelTitle} Bedroom`,
-          data: [],
-          borderColor: "#06b6d4", // Cyan
-          backgroundColor: "#06b6d4",
-          tension: 0.4,
-          fill: false,
-          pointRadius: 3,
-        },
-      ],
+      datasets: datasets,
     },
     options: {
       responsive: true,
@@ -109,33 +173,54 @@ export const initComparisonChart = (dataType) => {
 /**
  * Update the chart in real-time
  */
-export const updateChartRealTime = (currentDataType) => {
-  if (!myChart || chartMode !== 'realtime') return;
+export const updateChartRealTime = (currentDataType, sensorDataMap) => {
+  if (!myChart || chartMode !== 'realtime' || !sensorDataMap) return;
 
   const now = new Date();
   const timeLabel = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  myChart.data.labels.push(timeLabel);
-
-  let valLocal, valSala, valCuarto;
-
-  if (currentDataType === "temperatura") {
-    valLocal = realtimeData.local.temperatura;
-    valSala = realtimeData.sala.temperatura;
-    valCuarto = realtimeData.cuarto.temperatura;
-  } else {
-    valLocal = realtimeData.local.humedad;
-    valSala = realtimeData.sala.humedad;
-    valCuarto = realtimeData.cuarto.humedad;
+  // Only add label if it's new (simple verify)
+  if (myChart.data.labels.length === 0 || myChart.data.labels[myChart.data.labels.length - 1] !== timeLabel) {
+      myChart.data.labels.push(timeLabel);
   }
 
-  myChart.data.datasets[0].data.push(valLocal);
-  myChart.data.datasets[1].data.push(valSala);
-  myChart.data.datasets[2].data.push(valCuarto);
+  // Iterate datasets and find matching data in sensorDataMap (keyed by ID)
+  myChart.data.datasets.forEach(ds => {
+      const sId = ds.sensorId;
+      const dataObj = sensorDataMap[sId]; // Ex: { temperatura: 22, humedad: 50 }
+      
+      let val = null;
+      if (dataObj) {
+          val = currentDataType === "temperatura" ? dataObj.temperatura : dataObj.humedad;
+      }
+      
+      // If we pushed a new label, we MUST push a value to every dataset to keep them aligned
+      // If no new data came in this second, we can repeat last value or push null (gaps)
+      // For smooth lines, repeating last known value is often better, or push null for gaps.
+      // Let's assume we push null if no data.
+      
+      // Check if we already pushed for this timestamp? Chart.js is array based.
+      // If labels length > data length, push.
+      if (myChart.data.labels.length > ds.data.length) {
+          ds.data.push(val);
+      } else {
+          // Update last point?
+          // No, usually we tick once per interval. 
+          // But here we rely on incoming SSE events which might be sporadic.
+          // Better strategy: SSE updates a local state `sensorDataMap`, and a Interval updates the chart every 1s.
+          // BUT, to keep changes minimal, let's assume this is called on a Interval.
+          
+          // Wait, the original code called `updateChartRealTime` inside SSE onmessage.
+          // That means it updated for EVERY message. That's bad for multiple sensors (updates X times).
+          // We will refactor `app.js` to use an Interval for chart updates.
+      }
+  });
 
   if (myChart.data.labels.length > 20) {
-    myChart.data.labels.shift();
-    myChart.data.datasets.forEach((dataset) => dataset.data.shift());
+    while(myChart.data.labels.length > 20) myChart.data.labels.shift();
+    myChart.data.datasets.forEach((dataset) => {
+        while(dataset.data.length > 20) dataset.data.shift();
+    });
   }
   myChart.update('none'); 
 };

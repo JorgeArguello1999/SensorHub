@@ -1,28 +1,51 @@
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
 Base = declarative_base()
 
+class Sensor(Base):
+    __tablename__ = 'sensors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False) # 'esp32' or 'openweather'
+    token = Column(String, unique=True, nullable=True) # For ESP32 auth
+    lat = Column(Float, nullable=True) # For OpenWeather
+    lon = Column(Float, nullable=True) # For OpenWeather
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+    readings = relationship("SensorReading", back_populates="sensor", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "token": self.token,
+            "lat": self.lat,
+            "lon": self.lon,
+            "active": self.active,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
 class SensorReading(Base):
     __tablename__ = 'sensor_readings'
 
-    timestamp = Column(DateTime, primary_key=True, default=datetime.now)
-    # Using specific columns for known sensors, as per current usage
-    sala_temp = Column(Float, nullable=True)
-    sala_hum = Column(Float, nullable=True)
-    cuarto_temp = Column(Float, nullable=True)
-    cuarto_hum = Column(Float, nullable=True)
-    local_temp = Column(Float, nullable=True)
-    local_hum = Column(Float, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sensor_id = Column(Integer, ForeignKey('sensors.id'), nullable=False)
+    timestamp = Column(DateTime, default=datetime.now)
+    temperature = Column(Float, nullable=True)
+    humidity = Column(Float, nullable=True)
+
+    sensor = relationship("Sensor", back_populates="readings")
 
     def to_dict(self):
         return {
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            "sala_temp": self.sala_temp,
-            "sala_hum": self.sala_hum,
-            "cuarto_temp": self.cuarto_temp,
-            "cuarto_hum": self.cuarto_hum,
-            "local_temp": self.local_temp,
-            "local_hum": self.local_hum
+            "temperature": self.temperature,
+            "humidity": self.humidity,
+            "sensor_id": self.sensor_id,
+            "sensor_name": self.sensor.name if self.sensor else "Unknown"
         }
