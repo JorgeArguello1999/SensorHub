@@ -33,9 +33,11 @@ export const fetchOpenWeatherMapData = async () => {
 /**
  * Hourly history
  */
-export const fetchHourlyHistory = async (hours) => {
+export const fetchHourlyHistory = async (hours, sensorId) => {
   try {
-    const url = `/api/history?hours=${hours}`;
+    let url = `/api/history?hours=${hours}`;
+    if(sensorId && sensorId !== 'all') url += `&sensor_id=${sensorId}`;
+    
     const response = await fetch(url);
 
     if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
