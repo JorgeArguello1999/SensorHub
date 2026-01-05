@@ -434,6 +434,14 @@ const setupEventListeners = () => {
 
   // SEARCH AND CSV (Keep simplified)
   if(rangeSearchBtn) rangeSearchBtn.addEventListener("click", loadHistoryData);
+  if(downloadCsvButton) {
+      downloadCsvButton.addEventListener("click", () => {
+          const { headers, rows } = getVisibleChartData(globalSensors);
+          if(headers && rows) {
+            triggerCsvDownload(headers, rows, `sensor_data_${new Date().toISOString().slice(0,10)}.csv`);
+          }
+      });
+  }
 
 };
 

@@ -275,13 +275,24 @@ export const switchTab = (dataType) => {
 };
 
 export const getVisibleChartData = () => {
-    if (!myChart) return [];
-    // Helper to export CSV data dynamically
+    if (!myChart || !myChart.data.labels) return [];
+    
+    // Header
     const labels = myChart.data.labels;
-    // Map datasets to rows
-    // Header: Time, Sensor1, Sensor2...
-    // We assume backend handles CSV generation for now or simplified version
-    return []; // Placeholder until CSV export is dynamic
+    const datasets = myChart.data.datasets;
+    const header = ["Time", ...datasets.map(d => d.label)];
+    
+    // Rows
+    const rows = labels.map((time, i) => {
+        const rowData = [time];
+        datasets.forEach(ds => {
+            // ds.data[i] might be null
+            rowData.push(ds.data[i] !== null && ds.data[i] !== undefined ? ds.data[i] : "");
+        });
+        return rowData;
+    });
+
+    return { headers: header, rows: rows };
 };
 
 /**
