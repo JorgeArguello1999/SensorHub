@@ -15,13 +15,13 @@ export const fetchOpenWeatherMapData = async () => {
     
     const data = await response.json();
     
-    const tempCelsius = parseFloat(data.temperatura);
-    const humidity = parseFloat(data.humedad);
+    const tempCelsius = parseFloat(data.temperature);
+    const humidity = parseFloat(data.humidity);
 
-    realtimeData.local.temperatura = tempCelsius;
-    realtimeData.local.humedad = humidity;
+    realtimeData.local.temperature = tempCelsius;
+    realtimeData.local.humidity = humidity;
 
-    return { temperatura: tempCelsius, humedad: humidity };
+    return { temperature: tempCelsius, humidity: humidity };
 
   } catch (error) {
     console.error("API Fetch Error:", error);

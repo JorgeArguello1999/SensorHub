@@ -67,7 +67,7 @@ import {
 } from "./ui.js";
 
 // LOCAL STATE
-let activeTab = "temperatura";
+let activeTab = "temperature";
 let chartMode = "realtime"; 
 let cachedHistoryData = []; 
 let currentLogFilter = { sensorId: 'all', sort: 'newest' }; 
@@ -92,7 +92,7 @@ const fetchSensors = async () => {
         
         // Init sensorDataMap
         data.forEach(s => {
-            if(!sensorDataMap[s.id]) sensorDataMap[s.id] = { temperatura: 0, humedad: 0 };
+            if(!sensorDataMap[s.id]) sensorDataMap[s.id] = { temperature: 0, humidity: 0 };
         });
 
     } catch (e) { console.error("Error fetching sensors:", e); }
