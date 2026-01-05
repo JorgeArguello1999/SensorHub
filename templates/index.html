@@ -407,25 +407,9 @@
                                 <div class="text-xl md:text-2xl font-bold text-rose-400 mt-1" id="stat-outages-count">--
                                 </div>
                             </div>
-                            <div
-                                class="bg-emerald-900/20 p-3 rounded-xl border border-emerald-500/20 col-span-2 md:col-span-1">
-                                <span class="text-[10px] text-emerald-400 uppercase font-bold">Avg
-                                    Living</span>
-                                <div class="text-xl md:text-2xl font-bold text-emerald-400 mt-1" id="avg-sala-display">
-                                    --°</div>
-                            </div>
-                            <div
-                                class="bg-cyan-900/20 p-3 rounded-xl border border-cyan-500/20 col-span-2 md:col-span-1">
-                                <span class="text-[10px] text-cyan-400 uppercase font-bold">Avg Bedrm</span>
-                                <div class="text-xl md:text-2xl font-bold text-cyan-400 mt-1" id="avg-cuarto-display">
-                                    --°</div>
-                            </div>
-                            <div
-                                class="bg-amber-900/20 p-3 rounded-xl border border-amber-500/20 col-span-2 md:col-span-1">
-                                <span class="text-[10px] text-amber-400 uppercase font-bold">Avg
-                                    Outdoor</span>
-                                <div class="text-xl md:text-2xl font-bold text-amber-400 mt-1" id="avg-local-display">
-                                    --°</div>
+                            <!-- Dynamic Summary Cards -->
+                            <div id="analytics-cards-container" class="contents">
+                                <!-- Populated by JS -->
                             </div>
                         </div>
 
@@ -548,17 +532,15 @@
                         <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-sm z-10">
                             <tr
                                 class="border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                <th class="p-3">Timestamp</th>
-                                <th class="p-3 text-amber-400">Outdoor</th>
-                                <th class="p-3 text-emerald-400">Living</th>
-                                <th class="p-3 text-cyan-400">Bedrm</th>
-                                <th class="p-3">Status</th>
+                                <th class="p-3 text-emerald-400 text-left">Sensor</th>
+                                <th class="p-3 text-cyan-400 text-right">Temp</th>
+                                <th class="p-3 text-amber-400 text-right">Hum</th>
+                                <th class="p-3 text-right">Time</th>
                             </tr>
                         </thead>
                         <tbody class="text-sm text-slate-300 font-mono" id="data-table-body">
                             <tr>
-                                <td class="p-3 text-slate-500 italic" colspan="5">Waiting for live data...
-                                </td>
+                                <td class="p-3 text-slate-500 italic" colspan="4">Waiting for data...</td>
                             </tr>
                         </tbody>
                     </table>

@@ -173,85 +173,89 @@ export const initComparisonChart = (dataType, sensors) => {
 /**
  * Update the chart in real-time
  */
+/**
+ * Update the chart in real-time
+ * Should be called by an interval (e.g. every 1s)
+ */
 export const updateChartRealTime = (currentDataType, sensorDataMap) => {
   if (!myChart || chartMode !== 'realtime' || !sensorDataMap) return;
 
   const now = new Date();
   const timeLabel = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  // Only add label if it's new (simple verify)
-  if (myChart.data.labels.length === 0 || myChart.data.labels[myChart.data.labels.length - 1] !== timeLabel) {
-      myChart.data.labels.push(timeLabel);
-  }
+  // 1. Add new Label
+  myChart.data.labels.push(timeLabel);
 
-  // Iterate datasets and find matching data in sensorDataMap (keyed by ID)
+  // 2. Add data for each dataset
   myChart.data.datasets.forEach(ds => {
       const sId = ds.sensorId;
-      const dataObj = sensorDataMap[sId]; // Ex: { temperatura: 22, humedad: 50 }
+      const dataObj = sensorDataMap[sId]; 
       
       let val = null;
       if (dataObj) {
-          val = currentDataType === "temperatura" ? dataObj.temperatura : dataObj.humedad;
+          val = currentDataType === "temperatura" ? parseFloat(dataObj.temperature) : parseFloat(dataObj.humidity);
       }
-      
-      // If we pushed a new label, we MUST push a value to every dataset to keep them aligned
-      // If no new data came in this second, we can repeat last value or push null (gaps)
-      // For smooth lines, repeating last known value is often better, or push null for gaps.
-      // Let's assume we push null if no data.
-      
-      // Check if we already pushed for this timestamp? Chart.js is array based.
-      // If labels length > data length, push.
-      if (myChart.data.labels.length > ds.data.length) {
-          ds.data.push(val);
-      } else {
-          // Update last point?
-          // No, usually we tick once per interval. 
-          // But here we rely on incoming SSE events which might be sporadic.
-          // Better strategy: SSE updates a local state `sensorDataMap`, and a Interval updates the chart every 1s.
-          // BUT, to keep changes minimal, let's assume this is called on a Interval.
-          
-          // Wait, the original code called `updateChartRealTime` inside SSE onmessage.
-          // That means it updated for EVERY message. That's bad for multiple sensors (updates X times).
-          // We will refactor `app.js` to use an Interval for chart updates.
-      }
+      ds.data.push(val); // Push null if no data, or last value if you prefer hold
   });
 
-  if (myChart.data.labels.length > 20) {
-    while(myChart.data.labels.length > 20) myChart.data.labels.shift();
+  // 3. Shift if too long
+  const MAX_POINTS = 30;
+  if (myChart.data.labels.length > MAX_POINTS) {
+    while(myChart.data.labels.length > MAX_POINTS) myChart.data.labels.shift();
     myChart.data.datasets.forEach((dataset) => {
-        while(dataset.data.length > 20) dataset.data.shift();
+        while(dataset.data.length > MAX_POINTS) dataset.data.shift();
     });
   }
+  
   myChart.update('none'); 
 };
 
 /**
  * Render the static/api/history chart
  */
-export const renderStaticChart = (dataArray, currentDataType) => {
+/**
+ * Render the static/api/history chart
+ */
+export const renderStaticChart = (dataArray, currentDataType, globalSensors) => {
     if (!myChart) return;
+    if (!globalSensors) return;
 
-    const labels = dataArray.map(item => {
-        const parts = item.timestamp.split(' ');
-        return parts.length > 1 ? parts[1].substring(0, 5) : item.timestamp; 
+    // 1. Get unique sorted timestamps
+    const timestamps = [...new Set(dataArray.map(d => d.timestamp))].sort();
+    
+    // 2. Prepare datasets
+    const datasets = globalSensors.map(sensor => {
+        const sensorReadings = dataArray.filter(d => d.sensor_id === sensor.id);
+        const dataMap = new Map(sensorReadings.map(r => [r.timestamp, currentDataType === 'temperatura' ? r.temperature : r.humidity]));
+        
+        // Fill data array aligned with timestamps
+        const data = timestamps.map(ts => dataMap.has(ts) ? dataMap.get(ts) : null);
+        
+        let color = '#06b6d4'; // Default cyan
+        if (sensor.type === 'openweather') color = '#fbbf24'; // Amber
+        else if (sensor.name.toLowerCase().includes('bed')) color = '#10b981'; // Emerald
+        
+        return {
+            label: sensor.name,
+            data: data,
+            borderColor: color,
+            backgroundColor: color + '20', // Opacity
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            sensorId: sensor.id
+        };
+    });
+    
+    // Format labels
+    const labels = timestamps.map(ts => {
+        const parts = ts.split(' ');
+        return parts.length > 1 ? parts[1].substring(0, 5) : ts; 
     });
 
-    let dLocal, dSala, dCuarto;
-
-    if (currentDataType === "temperatura") {
-        dLocal = dataArray.map(i => i.local_temp);
-        dSala = dataArray.map(i => i.sala_temp);
-        dCuarto = dataArray.map(i => i.cuarto_temp);
-    } else {
-        dLocal = dataArray.map(i => i.local_hum);
-        dSala = dataArray.map(i => i.sala_hum);
-        dCuarto = dataArray.map(i => i.cuarto_hum);
-    }
-
     myChart.data.labels = labels;
-    myChart.data.datasets[0].data = dLocal;
-    myChart.data.datasets[1].data = dSala;
-    myChart.data.datasets[2].data = dCuarto;
+    myChart.data.datasets = datasets;
     myChart.options.animation.duration = 1000; 
     myChart.update();
 };
@@ -266,18 +270,18 @@ export const switchTab = (dataType) => {
       button.classList.add("border-transparent", "text-slate-400");
     }
   });
-  initComparisonChart(dataType);
+  // Note: App.js re-inits chart after this returns
   return dataType; 
 };
 
 export const getVisibleChartData = () => {
     if (!myChart) return [];
+    // Helper to export CSV data dynamically
     const labels = myChart.data.labels;
-    const datasetLocal = myChart.data.datasets[0].data;
-    const datasetSala = myChart.data.datasets[1].data;
-    const datasetCuarto = myChart.data.datasets[2].data;
-
-    return labels.map((label, index) => [label, datasetLocal[index], datasetSala[index], datasetCuarto[index]]);
+    // Map datasets to rows
+    // Header: Time, Sensor1, Sensor2...
+    // We assume backend handles CSV generation for now or simplified version
+    return []; // Placeholder until CSV export is dynamic
 };
 
 /**
@@ -291,9 +295,9 @@ const calculateStdDev = (arr, mean) => {
     return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
 };
 
-export const renderAnalytics = (data, dataType = 'temperatura') => {
+export const renderAnalytics = (data, dataType = 'temperatura', globalSensors) => {
     
-    if (!data || data.length === 0) {
+    if (!data || data.length === 0 || !globalSensors) {
         document.getElementById("stat-total-samples").textContent = "0";
         document.getElementById("outages-list").innerHTML = '<li class="text-xs text-slate-500 italic p-2">No data available.</li>';
         return;
@@ -301,100 +305,93 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
 
     const isTemp = dataType === 'temperatura';
     const unit = isTemp ? "°" : "%";
-    const suffix = isTemp ? "_temp" : "_hum"; 
-
-    let salaVals = [], cuartoVals = [], localVals = [];
-    let outages = [];
-    let previousTime = null;
+    
+    let allOutages = [];
+    let statsPerSensor = [];
     const GAP_THRESHOLD_MS = 20 * 60 * 1000; 
 
-    data.forEach(d => {
-        const valSala = d[`sala${suffix}`];
-        const valCuarto = d[`cuarto${suffix}`];
-        const valLocal = d[`local${suffix}`];
-
-        if (valSala !== null) salaVals.push(valSala);
-        if (valCuarto !== null) cuartoVals.push(valCuarto);
-        if (valLocal !== null) localVals.push(valLocal);
-
-        const safeDateStr = d.timestamp.replace(" ", "T");
-        const currentTime = new Date(safeDateStr).getTime();
+    // Process per sensor
+    globalSensors.forEach(sensor => {
+        const sensorReadings = data.filter(d => d.sensor_id === sensor.id).sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
         
-        if (previousTime) {
-            const diff = currentTime - previousTime;
-            if (diff > GAP_THRESHOLD_MS) {
-                const durationMinutes = Math.floor(diff / 60000);
-                outages.push({
-                    date: d.timestamp.split(' ')[0],
-                    from: new Date(previousTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                    to: new Date(currentTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                    duration: durationMinutes
-                });
-            }
+        // 1. Calculate Stats
+        const values = sensorReadings.map(d => isTemp ? d.temperature : d.humidity).filter(v => v !== null);
+        
+        let stats = { min: 0, max: 0, avg: 0, std: 0, name: sensor.name, type: sensor.type };
+        if (values.length > 0) {
+            stats.min = Math.min(...values);
+            stats.max = Math.max(...values);
+            const sum = values.reduce((a, b) => a + b, 0);
+            stats.avg = sum / values.length;
+            stats.std = calculateStdDev(values, stats.avg);
         }
-        previousTime = currentTime;
+        statsPerSensor.push(stats);
+
+        // 2. Detect Outages
+        let previousTime = null;
+        sensorReadings.forEach(d => {
+            const time = new Date(d.timestamp.replace(" ", "T")).getTime();
+            if (previousTime) {
+                const diff = time - previousTime;
+                if (diff > GAP_THRESHOLD_MS) {
+                    allOutages.push({
+                        sensor: sensor.name,
+                        date: d.timestamp.split(' ')[0],
+                        from: new Date(previousTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        to: new Date(time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        duration: Math.floor(diff / 60000)
+                    });
+                }
+            }
+            previousTime = time;
+        });
     });
 
+    // Update DOM
     const total = data.length;
-
-    const getStats = (arr) => {
-        if (arr.length === 0) return { min: 0, max: 0, avg: 0, std: 0 };
-        const min = Math.min(...arr);
-        const max = Math.max(...arr);
-        const sum = arr.reduce((a, b) => a + b, 0);
-        const avg = sum / arr.length;
-        const std = calculateStdDev(arr, avg);
-        return { min, max, avg, std };
-    };
-
-    const sStats = getStats(salaVals);
-    const cStats = getStats(cuartoVals);
-    const lStats = getStats(localVals);
-
+    const outages = allOutages;
     document.getElementById("stat-total-samples").textContent = total;
     document.getElementById("stat-uptime").textContent = outages.length === 0 ? "100%" : (100 - (outages.length * 0.5)).toFixed(1) + "%"; 
     document.getElementById("stat-outages-count").textContent = outages.length;
     
-    document.getElementById("avg-sala-display").textContent = sStats.avg.toFixed(1) + unit;
-    document.getElementById("avg-cuarto-display").textContent = cStats.avg.toFixed(1) + unit;
-    document.getElementById("avg-local-display").textContent = lStats.avg.toFixed(1) + unit;
-
+    // Dynamic Summary Cards
+    const container = document.getElementById("analytics-cards-container");
+    if(container) {
+        container.innerHTML = statsPerSensor.map(s => {
+            const color = s.type === 'openweather' ? 'amber' : (s.name.toLowerCase().includes('bed') ? 'cyan' : 'emerald');
+            return `
+                <div class="bg-${color}-900/20 p-3 rounded-xl border border-${color}-500/20 col-span-2 md:col-span-1">
+                    <span class="text-[10px] text-${color}-400 uppercase font-bold">Avg ${s.name.split(' ')[0]}</span>
+                    <div class="text-xl md:text-2xl font-bold text-${color}-400 mt-1">${s.avg.toFixed(1)}${unit}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // Dynamic Stats Table
     const tbody = document.getElementById("stats-minmax-body");
-    tbody.innerHTML = `
+    tbody.innerHTML = statsPerSensor.map(s => `
         <tr class="border-b border-white/5 hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-500"></div>Living</td>
-            <td class="text-right font-mono text-slate-300">${sStats.min.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-slate-300">${sStats.max.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-emerald-400 font-bold">${sStats.avg.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-xs text-slate-500">±${sStats.std.toFixed(2)}</td>
+            <td class="py-3 pl-2 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full ${s.type==='openweather'?'bg-amber-500':'bg-cyan-500'}"></div>
+                ${s.name}
+            </td>
+            <td class="text-right font-mono text-slate-300">${s.min.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-slate-300">${s.max.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-${s.type==='openweather'?'amber':'cyan'}-400 font-bold">${s.avg.toFixed(1)}${unit}</td>
+            <td class="text-right font-mono text-xs text-slate-500">±${s.std.toFixed(2)}</td>
         </tr>
-        <tr class="border-b border-white/5 hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-cyan-500"></div>Bedroom</td>
-            <td class="text-right font-mono text-slate-300">${cStats.min.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-slate-300">${cStats.max.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-cyan-400 font-bold">${cStats.avg.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-xs text-slate-500">±${cStats.std.toFixed(2)}</td>
-        </tr>
-        <tr class="hover:bg-white/5">
-            <td class="py-3 pl-2 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-amber-500"></div>Outdoor</td>
-            <td class="text-right font-mono text-slate-300">${lStats.min.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-slate-300">${lStats.max.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-amber-400 font-bold">${lStats.avg.toFixed(1)}${unit}</td>
-            <td class="text-right font-mono text-xs text-slate-500">±${lStats.std.toFixed(2)}</td>
-        </tr>
-    `;
+    `).join('');
 
+    // Outages List
     const list = document.getElementById("outages-list");
-    if (outages.length === 0) {
-        list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">
-            <i data-lucide="check-circle" class="w-4 h-4 mx-auto mb-1"></i>
-            Stable Connection
-        </li>`;
+    if (allOutages.length === 0) {
+        list.innerHTML = `<li class="text-xs text-emerald-400/80 italic p-3 border border-dashed border-emerald-500/30 rounded-lg text-center bg-emerald-500/5">Stable Connection</li>`;
     } else {
-        list.innerHTML = outages.map(o => `
+        list.innerHTML = allOutages.slice(0, 10).map(o => `
             <li class="bg-rose-500/10 border border-rose-500/20 p-2 rounded flex justify-between items-center mb-2">
                 <div>
-                    <div class="text-[10px] text-rose-300 font-bold flex items-center gap-1"><i data-lucide="zap-off" class="w-3 h-3"></i> ${o.date}</div>
+                    <div class="text-[10px] text-rose-300 font-bold">${o.sensor} - ${o.date}</div>
                     <div class="text-xs text-slate-300 mt-0.5">${o.from} - ${o.to}</div>
                 </div>
                 <div class="text-right bg-rose-500/20 px-2 py-1 rounded">
@@ -406,11 +403,11 @@ export const renderAnalytics = (data, dataType = 'temperatura') => {
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    renderAnalyticsBarChart(sStats, cStats, lStats, isTemp ? "Temperature" : "Humidity");
+    renderAnalyticsBarChart(statsPerSensor, isTemp ? "Temperature" : "Humidity");
 };
 
 // Bar chart
-const renderAnalyticsBarChart = (s, c, l, labelType) => {
+const renderAnalyticsBarChart = (statsArray, labelType) => {
     const ctx = document.getElementById("analytics-chart").getContext("2d");
     
     if (analyticsChart) analyticsChart.destroy();
@@ -418,23 +415,23 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
     analyticsChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Living', 'Bedroom', 'Outdoor'],
+            labels: statsArray.map(s => s.name),
             datasets: [
                 {
                     label: 'Min',
-                    data: [s.min, c.min, l.min],
+                    data: statsArray.map(s => s.min),
                     backgroundColor: '#94a3b8',
                     borderRadius: 4,
                 },
                 {
                     label: 'Avg',
-                    data: [s.avg, c.avg, l.avg],
-                    backgroundColor: ['#10b981', '#06b6d4', '#fbbf24'],
+                    data: statsArray.map(s => s.avg),
+                    backgroundColor: statsArray.map(s => s.type === 'openweather' ? '#fbbf24' : '#06b6d4'),
                     borderRadius: 4,
                 },
                 {
                     label: 'Max',
-                    data: [s.max, c.max, l.max],
+                    data: statsArray.map(s => s.max),
                     backgroundColor: '#cbd5e1',
                     borderRadius: 4,
                 }
@@ -444,25 +441,11 @@ const renderAnalyticsBarChart = (s, c, l, labelType) => {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top', labels: { color: '#cbd5e1', font: {size: 10} } },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + context.parsed.y + (labelType === "Temperature" ? "°C" : "%");
-                        }
-                    }
-                }
+                legend: { position: 'top', labels: { color: '#cbd5e1' } }
             },
             scales: {
-                y: { 
-                    beginAtZero: false, 
-                    grid: { color: "#33415520" },
-                    ticks: { color: "#94a3b8" } 
-                },
-                x: { 
-                    grid: { display: false },
-                    ticks: { color: "#94a3b8" } 
-                }
+                y: { grid: { color: "#33415520" }, ticks: { color: "#94a3b8" } },
+                x: { grid: { display: false }, ticks: { color: "#94a3b8" } }
             }
         }
     });

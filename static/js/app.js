@@ -176,9 +176,10 @@ const setupStreamListener = () => {
           // Note: Chart update is now decoupled or we can call it here if we want instant gratification
           // But for multiple sensors, better to tick periodically or just call it here once.
           // Since we changed updateChartRealTime to iterate all datasets, calling it here is fine.
-          if (chartMode === 'realtime') {
-             updateChartRealTime(activeTab, sensorDataMap);
-          }
+          // Note: Chart update is now decoupled to Interval
+          // if (chartMode === 'realtime') {
+          //    updateChartRealTime(activeTab, sensorDataMap);
+          // }
       }
 
     } catch (e) { console.error("SSE Error", e); }
@@ -197,31 +198,41 @@ const loadHistoryData = async () => {
         cachedHistoryData = data; 
 
         if (chartMode === 'analytics') {
-            renderAnalytics(data, activeTab);
+            renderAnalytics(data, activeTab, globalSensors);
         } else if (chartMode === 'history') {
-            renderStaticChart(data, activeTab);
-            fillHistoryTable(data);
+            renderStaticChart(data, activeTab, globalSensors);
+            fillHistoryTable(data, globalSensors);
         }
     } catch (e) { console.error(e); }
 
     if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
 };
 
-const fillHistoryTable = (data) => {
+const fillHistoryTable = (data, sensors) => {
     const tableBody = document.getElementById('data-table-body');
     if (tableBody && data.length > 0) {
         tableBody.innerHTML = ""; 
-        data.slice(0, 10).forEach(row => { 
+        // Show recent 20 readings
+        data.slice(0, 20).forEach(row => { 
+             let color = "text-slate-400";
+             const sensor = sensors.find(s => s.id === row.sensor_id);
+             if(sensor) {
+                 if(sensor.type === 'openweather') color = "text-amber-400";
+                 else if(sensor.name.toLowerCase().includes('bed')) color = "text-cyan-400";
+                 else color = "text-emerald-400";
+             }
+
              const tr = `
                 <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td class="p-3 text-slate-400 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
-                    <td class="p-3 font-bold text-amber-500">${row.local_temp}°</td>
-                    <td class="p-3 font-bold text-emerald-500">${row.sala_temp}°</td>
-                    <td class="p-3 font-bold text-cyan-500">${row.cuarto_temp}°</td>
-                    <td class="p-3"><span class="text-xs text-slate-500">History</span></td>
+                    <td class="p-3 ${color} font-bold">${row.sensor_name || 'Unknown'}</td>
+                    <td class="p-3 text-right font-mono text-slate-300">${row.temperature !== null ? row.temperature.toFixed(1)+'°' : '--'}</td>
+                    <td class="p-3 text-right font-mono text-slate-300">${row.humidity !== null ? row.humidity.toFixed(0)+'%' : '--'}</td>
+                    <td class="p-3 text-right text-slate-500 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
                 </tr>`;
              tableBody.insertAdjacentHTML('beforeend', tr);
         });
+    } else if (tableBody) {
+        tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic text-center" colspan="4">No data found</td></tr>`;
     }
 };
 
@@ -236,7 +247,16 @@ const setupEventListeners = () => {
         // Reload history logic... (simplified for now)
         initComparisonChart(activeTab, globalSensors);
         if(chartMode === 'history' || chartMode === 'analytics'){
-            loadHistoryData();
+             // Re-render with existing cache if valid
+             if (cachedHistoryData.length > 0) {
+                 if (chartMode === 'analytics') renderAnalytics(cachedHistoryData, activeTab, globalSensors);
+                 else {
+                     renderStaticChart(cachedHistoryData, activeTab, globalSensors);
+                     fillHistoryTable(cachedHistoryData, globalSensors);
+                 }
+             } else {
+                 loadHistoryData();
+             }
         }
       }
     });
@@ -419,5 +439,10 @@ document.addEventListener("DOMContentLoaded", () => {
   
   fetchSensors(); // Load dynamic sensors
   
-  // setInterval(updatePredictions, 600000); // LEGACY
+  // Start Realtime Chart Interval (1Hz)
+  setInterval(() => {
+      if(chartMode === 'realtime') {
+          updateChartRealTime(activeTab, sensorDataMap);
+      }
+  }, 1000);
 });
