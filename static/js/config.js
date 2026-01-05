@@ -18,9 +18,9 @@ export const OPENWEATHER_URL = "/api/weather/";
 // GLOBAL STATE VARIABLES
 // ----------------------------------------------------------------------
 export let realtimeData = {
-  local: { temperatura: 0, humedad: 0 },
-  sala: { temperatura: 0, humedad: 0 },
-  cuarto: { temperatura: 0, humedad: 0 },
+  local: { temperature: 0, humidity: 0 },
+  sala: { temperature: 0, humidity: 0 },
+  cuarto: { temperature: 0, humidity: 0 },
 };
 
 // Chart/view state
@@ -28,11 +28,11 @@ export let chartMode = "realtime";
 export let historyHours = 2;       
 
 export let comparisonChartInstance = null;
-export let currentChartDataType = "temperatura"; 
+export let currentChartDataType = "temperature"; 
 
 // --- USER STATE (New) ---
 export let globalSensors = []; // Array of sensor objects
-export let sensorDataMap = {}; // Key: sensor_id, Value: {temperatura: X, humedad: Y}
+export let sensorDataMap = {}; // Key: sensor_id, Value: {temperature: X, humidity: Y}
 export let adminToken = null; // Store password temporarily
 
 export let userSensors = [

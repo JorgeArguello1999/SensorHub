@@ -122,7 +122,7 @@ export const initComparisonChart = (dataType, sensors) => {
 
   if(!sensors) return;
 
-  const isTemperature = dataType === "temperatura";
+  const isTemperature = dataType === "temperature";
   const unit = isTemperature ? "°C" : "%";
   
   // Dynamic Datasets
@@ -193,7 +193,7 @@ export const updateChartRealTime = (currentDataType, sensorDataMap) => {
       
       let val = null;
       if (dataObj) {
-          val = currentDataType === "temperatura" ? parseFloat(dataObj.temperature) : parseFloat(dataObj.humidity);
+          val = currentDataType === "temperature" ? parseFloat(dataObj.temperature) : parseFloat(dataObj.humidity);
       }
       ds.data.push(val); // Push null if no data, or last value if you prefer hold
   });
@@ -226,7 +226,7 @@ export const renderStaticChart = (dataArray, currentDataType, globalSensors) => 
     // 2. Prepare datasets
     const datasets = globalSensors.map(sensor => {
         const sensorReadings = dataArray.filter(d => d.sensor_id === sensor.id);
-        const dataMap = new Map(sensorReadings.map(r => [r.timestamp, currentDataType === 'temperatura' ? r.temperature : r.humidity]));
+        const dataMap = new Map(sensorReadings.map(r => [r.timestamp, currentDataType === 'temperature' ? r.temperature : r.humidity]));
         
         // Fill data array aligned with timestamps
         const data = timestamps.map(ts => dataMap.has(ts) ? dataMap.get(ts) : null);
@@ -306,7 +306,7 @@ const calculateStdDev = (arr, mean) => {
     return Math.sqrt(arr.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / arr.length);
 };
 
-export const renderAnalytics = (data, dataType = 'temperatura', globalSensors) => {
+export const renderAnalytics = (data, dataType = 'temperature', globalSensors) => {
     
     if (!data || data.length === 0 || !globalSensors) {
         document.getElementById("stat-total-samples").textContent = "0";
@@ -314,7 +314,7 @@ export const renderAnalytics = (data, dataType = 'temperatura', globalSensors) =
         return;
     }
 
-    const isTemp = dataType === 'temperatura';
+    const isTemp = dataType === 'temperature';
     const unit = isTemp ? "°" : "%";
     
     let allOutages = [];

@@ -91,15 +91,15 @@ def guardar_historial():
                 continue
 
         session.commit()
-        print(f"💾 [HISTORIAL] Datos guardados en SQLite.")
+        print(f"💾 [HISTORY] Data saved to SQLite.")
         session.close()
 
     except Exception as e:
-        print(f"❌ Error guardando historial: {e}")
+        print(f"❌ Error saving history: {e}")
 
 def _worker_loop():
     """Simple loop that saves data periodically."""
-    print("🚀 Worker de Persistencia iniciado.")
+    print("🚀 Persistence Worker started.")
     last_save_time = time.time()
     last_weather_time = 0
     
@@ -125,7 +125,7 @@ def _worker_loop():
             print(f"⚠️ Error reading config: {e}")
 
         if (ahora - last_save_time) > (interval_minutes * 60):
-             print(f"⏱️ Intervalo de {interval_minutes}m cumplido. Guardando historial...")
+             print(f"⏱️ Interval of {interval_minutes}m reached. Saving history...")
              guardar_historial()
              last_save_time = ahora
 

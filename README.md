@@ -102,14 +102,45 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
     uv run test/esp32_simulator.py <PASTE_YOUR_TOKEN_HERE>
     ```
 
-## 📸 Screenshots
+## ⚙️ Configuration & Management 
 
-### Dashboard & Analytics
-![Screenshot 1](static/images/screenshot_1.png)
+### Admin Access
+1. Click the **"Admin Access"** button in the sidebar footer.
+2. Enter the default password (set in `.env` as `ADMIN_PASSWORD`, default is **`admin123`**).
+3. Once authenticated, you can manage sensors and system settings.
 
+### System Settings (New)
+You can configure how often the system saves sensor data to the persistent database (SQLite/Postgres). This is useful to balance between high-resolution history and database size.
+- Go to the **Config Modal** (after Admin login).
+- Click on **System Settings**.
+- Set the **"Data Save Interval"** in minutes (Default: 15 min).
 
-### Sensor Management & History
-![Screenshot 2](static/images/screenshot_2.png)
+### Managing Sensors
+- **Add Sensor:** Choose between "ESP32 Device" (Physical) or "OpenWeather" (Virtual API).
+- **Remove Sensor:** Click the trash icon next to any sensor in the list.
+
+## 🤖 AI & Predictions Usage
+
+The Dashboard features a client-side AI module that uses **Linear Regression** to predict temperatures for key times of the day (Morning, Afternoon, Night) based on the last 12 hours of data.
+
+- **Automatic:** Predictions update automatically as new data flows in.
+- **Custom Check:** You can manually input a specific time in the "AI Predictions" panel to get a forecasted temperature for that specific moment.
+
+## 📸 Gallery
+
+<p align="center">
+  <img src="static/images/screenshot_1.png" width="45%" alt="Dashboard Overview">
+  <img src="static/images/screenshot_2.png" width="45%" alt="Analytics">
+</p>
+<p align="center">
+  <img src="static/images/screenshot_3.png" width="45%" alt="Sensor Config">
+  <img src="static/images/screenshot_4.png" width="45%" alt="History View">
+</p>
+<p align="center">
+  <img src="static/images/screenshot_5.png" width="30%" alt="Mobile View 1">
+  <img src="static/images/screenshot_6.png" width="30%" alt="Mobile View 2">
+  <img src="static/images/screenshot_7.png" width="30%" alt="Dark Mode">
+</p>
 
 ---
 Built with ❤️ by JorgeArguello
