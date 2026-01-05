@@ -27,8 +27,9 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
 ### 🤖 AI & Predictions
 - **Prediction Engine:** Client-side Linear Regression implementation to forecast short-term temperature trends (Morning, Afternoon, Night).
 
-### ⚙️ Sensor Management
-- **Management Interface:** Dynamic UI to add, edit, or remove sensors on the fly.
+### ⚙️ Configuration & Management
+- **Sensor Management:** Dynamic UI to add, edit, or remove sensors on the fly.
+- **System Settings:** Configurable data save interval (DB persistence frequency) directly from the UI.
 - **Authentication:** Modern Sign In / Sign Up interface for secure access.
 
 ## 🛠️ Tech Stack
@@ -56,14 +57,35 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
     uv sync
     ```
 
-3.  **Environment Configuration:**
-    Create a `.env` file (see `.env.example` if available):
-    * `OPENWEATHER_API_KEY`: Your OpenWeatherMap API Key.
-    * `REDIS_HOST`: localhost (default)
-    * `REDIS_PORT`: 6379 (default)
-    * `DATABASE_URL`: (Optional) Connection string for PostgreSQL or SQLite. Defaults to `sqlite:///sensors.db`.
+3.  **Environment Configuration (.env):**
+    Create a `.env` file in the root directory. You can use the following template:
 
-4.  **Run the application:**
+    ```ini
+    # Security
+    SECRET_KEY=your_secret_key_here  # Used for Flask sessions
+    ADMIN_PASSWORD=admin123          # Password to access the Admin/Config panel
+
+    # External APIs
+    OPENWEATHER_API_KEY=your_owm_key # get one at openweathermap.org
+
+    # Database & Cache
+    DATABASE_URL=sqlite:///sensors.db # or postgresql://user:pass@localhost/dbname
+    REDIS_HOST=localhost
+    REDIS_PORT=6379
+    REDIS_DB=0
+
+    # Server
+    PORT=5000
+    ```
+
+    | Variable | Description | Default |
+    | :--- | :--- | :--- |
+    | `ADMIN_PASSWORD` | **Required.** Protects the sensor configuration panel. | `None` (must be set) |
+    | `OPENWEATHER_API_KEY` | **Required** for "Outdoor" weather data. | `None` |
+    | `SECRET_KEY` | Flask session security. | `dev_key` |
+    | `DATABASE_URL` | SQLAlchemy connection string. | `sqlite:///sensors.db` |
+    | `REDIS_HOST` | Redis server address. | `localhost` |
+
     ```bash
     uv run manage.py
     ```
@@ -71,8 +93,13 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
 
 5.  **Run ESP32 Simulator (Optional):**
     If you don't have physical sensors yet, you can send simulated data:
+    
+    1.  Go to the Web UI -> **Config** -> **Add New Sensor**.
+    2.  Select **ESP32**, give it a name, and Create.
+    3.  **Copy the Token** displayed in the alert.
+    4.  Run the simulator:
     ```bash
-    uv run test/esp32_simulator.py
+    uv run test/esp32_simulator.py <PASTE_YOUR_TOKEN_HERE>
     ```
 
 ## 📸 Screenshots

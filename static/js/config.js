@@ -31,7 +31,10 @@ export let comparisonChartInstance = null;
 export let currentChartDataType = "temperatura"; 
 
 // --- USER STATE (New) ---
-export let isUserLoggedIn = false;
+export let globalSensors = []; // Array of sensor objects
+export let sensorDataMap = {}; // Key: sensor_id, Value: {temperatura: X, humedad: Y}
+export let adminToken = null; // Store password temporarily
+
 export let userSensors = [
     { id: 1, name: "Living Room Node", location: "sala", token: "esp32_token_sala_01", status: "active" },
     { id: 2, name: "Bedroom Node", location: "cuarto", token: "esp32_token_cuarto_02", status: "active" }
@@ -73,13 +76,40 @@ export let dashboardView = null; // New Main View
 export let sensorManagementView = null; // New Management View
 
 // Auth & Sensors (New)
-export let btnAuthToggle = null;
-export let authModal = null;
-export let btnCloseAuth = null;
-export let authForm = null;
-export let btnSwitchAuth = null; 
+
 export let sensorListContainer = null;
-export let btnAddSensor = null;
+export let btnAddSensor = null; // Deprecated possibly
+
+// Admin & Config Refs
+export let btnAdminSettings = null;
+export let adminAuthModal = null;
+export let btnCloseAdminAuth = null;
+export let adminAuthForm = null;
+export let adminPasswordInput = null;
+export let adminAuthError = null;
+
+export let sensorConfigModal = null;
+export let btnCloseConfig = null;
+export let btnViewSensors = null;
+export let btnAddSensorView = null;
+export let configViewList = null;
+export let configViewAdd = null;
+export let configSensorList = null;
+
+// System Settings Refs
+export let btnSystemSettings = null;
+export let configViewSystem = null;
+export let systemConfigForm = null;
+export let sysSaveIntervalInput = null;
+
+export let typeSelectEsp32 = null;
+export let typeSelectWeather = null;
+export let addSensorForm = null;
+export let newSensorType = null;
+export let newSensorName = null;
+export let fieldCoords = null;
+export let newSensorLat = null;
+export let newSensorLon = null;
 
 // Prediction controls
 export let predictionDate = null;
@@ -120,15 +150,43 @@ export const initDOMRefs = () => {
   sensorManagementView = document.getElementById("sensor-management-view");
 
   // New Auth Refs
-  btnAuthToggle = document.getElementById("btn-auth-toggle");
-  authModal = document.getElementById("auth-modal");
-  btnCloseAuth = document.getElementById("btn-close-auth");
-  authForm = document.getElementById("auth-form");
-  btnSwitchAuth = document.getElementById("btn-switch-auth");
+
   
   // New Sensor Mgmt Refs
-  sensorListContainer = document.getElementById("sensor-list-container");
-  btnAddSensor = document.getElementById("btn-add-sensor");
+  sensorListContainer = document.getElementById("sensor-list-container"); // Only if kept
+  
+  // -- ADMIN REFS --
+  btnAdminSettings = document.getElementById("btn-admin-settings");
+  adminAuthModal = document.getElementById("admin-auth-modal");
+  btnCloseAdminAuth = document.getElementById("btn-close-admin-auth");
+  adminAuthForm = document.getElementById("admin-auth-form");
+  adminPasswordInput = document.getElementById("admin-password-input");
+  adminAuthError = document.getElementById("admin-auth-error");
+
+  // -- CONFIG REFS --
+  sensorConfigModal = document.getElementById("sensor-config-modal");
+  btnCloseConfig = document.getElementById("btn-close-config");
+  btnViewSensors = document.getElementById("btn-view-sensors");
+  btnAddSensorView = document.getElementById("btn-add-sensor-view");
+  configViewList = document.getElementById("config-view-list");
+  configViewAdd = document.getElementById("config-view-add");
+  configSensorList = document.getElementById("config-sensor-list");
+
+  // System Settings Refs
+  btnSystemSettings = document.getElementById("btn-system-settings");
+  configViewSystem = document.getElementById("config-view-system");
+  systemConfigForm = document.getElementById("system-config-form");
+  sysSaveIntervalInput = document.getElementById("sys-save-interval");
+  
+  // -- ADD SENSOR FORM --
+  typeSelectEsp32 = document.getElementById("type-select-esp32");
+  typeSelectWeather = document.getElementById("type-select-weather");
+  addSensorForm = document.getElementById("add-sensor-form");
+  newSensorType = document.getElementById("new-sensor-type");
+  newSensorName = document.getElementById("new-sensor-name");
+  fieldCoords = document.getElementById("field-coords");
+  newSensorLat = document.getElementById("new-sensor-lat");
+  newSensorLon = document.getElementById("new-sensor-lon");
 
   predictionDate = document.getElementById("prediction-date");
   predictButton = document.getElementById("predict-button");

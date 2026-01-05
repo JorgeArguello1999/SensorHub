@@ -1,23 +1,21 @@
 import json
 import sys
 import os
+import uuid
 
 # Add parent dir to path to allow imports if run directly
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.db import redis_client, SessionLocal, init_db
-from models.sql_models import SensorReading
+from models.sql_models import SensorReading, Sensor
 from services.sensor_worker import guardar_historial
 
 def run_verification(app_instance, safe_mode=True):
     """
     Verifies the application health and data flow.
-    :param app_instance: Flask app instance
-    :param safe_mode: If True, does not delete existing data.
     """
     print(f"🧪 Starting App Verification (Safe Mode: {safe_mode})...")
     
-    # Initialize DB (verify connection)
     try:
         init_db()
     except Exception as e:
@@ -27,65 +25,56 @@ def run_verification(app_instance, safe_mode=True):
     client = app_instance.test_client()
     session = SessionLocal()
     
-    # Setup test data
-    test_key = "sensors:test_health"
+    sensor_id = None
     
     try:
-        # Clear specific test keys/data
-        if redis_client:
-            redis_client.delete(test_key)
-            if not safe_mode:
-                redis_client.delete("sensors:current")
+        # 1. Create Test Sensor
+        print("   Creating Test Sensor...")
+        sensor_payload = {"name": "TestVerify", "type": "esp32"}
+        resp = client.post('/api/sensors', json=sensor_payload)
         
-        if not safe_mode:
-            session.query(SensorReading).delete()
-            session.commit()
+        if resp.status_code != 201:
+            print(f"❌ Failed to create sensor: {resp.status_code} - {resp.data}")
+            return False
+            
+        sensor_data = resp.json
+        sensor_token = sensor_data['token']
+        sensor_id = sensor_data['id']
+        print(f"   ✅ Sensor Created: ID={sensor_id}, Token={sensor_token}")
 
-        # 1. Test Ingestion (API -> Redis)
-        # We use a distinct path for health check to avoid messing with real 'sala' data
-        # unless we are in full verification mode (not safe mode).
-        target_path = "/debug_check" if safe_mode else "/sala"
-        payload = {
-            "path": target_path,
-            "data": {"temperatura": 99.9, "humedad": 10.0} # Distinct values
-        }
+        # 2. Test Ingestion (API -> Redis)
+        ingest_payload = {"temperature": 99.9, "humidity": 10.0}
         
-        print(f"   Testing POST /api/sensors (path: {target_path})...")
-        resp = client.post('/api/sensors', json=payload)
+        print(f"   Testing POST /api/ingest/{sensor_token}...")
+        resp = client.post(f'/api/ingest/{sensor_token}', json=ingest_payload)
         
         if resp.status_code != 200:
-            print(f"❌ API Failed: {resp.status_code} - {resp.data}")
+            print(f"❌ Ingest Failed: {resp.status_code} - {resp.data}")
             return False
         
         # Verify Redis
         if redis_client:
-            # The API writes to "sensors:current" -> path
-            val = redis_client.hget("sensors:current", target_path.strip("/"))
+            val = redis_client.hget("sensors:current", str(sensor_id))
             if not val:
-                 print(f"❌ Redis key 'sensors:current' -> '{target_path.strip('/')}' missing.")
+                 print(f"❌ Redis key 'sensors:current' -> '{sensor_id}' missing.")
                  return False
             
             data_in_redis = json.loads(val)
-            if data_in_redis['temperatura'] == 99.9:
+            if data_in_redis['temperature'] == 99.9:
                 print("✅ API -> Redis Flow: OK")
             else:
                 print(f"❌ Redis data mismatch: {data_in_redis}")
                 return False
 
-        # 2. Test Persistence (Redis -> SQLite)
-        # If safe mode, we skipping forcing global persistence to avoid writing the debug data to history DB if possible
-        # Or we accept that one '99.9' reading goes into history.
-        # For a "startup check", checking DB connection is enough usually.
-        # But user asked for "verification". 
-        # let's skip persistence check in safe mode to avoid polluting DB with 99.9
-        
+        # 3. Test Persistence (Redis -> SQLite)
         if not safe_mode:
             print("   Testing Persistence (guardar_historial)...")
             guardar_historial()
             
             # Verify SQLite
-            reading = session.query(SensorReading).order_by(SensorReading.timestamp.desc()).first()
-            if reading and (reading.sala_temp == 99.9 or reading.sala_temp == 25.5): # 25.5 was old test, 99.9 is new
+            # Query last reading for this sensor
+            reading = session.query(SensorReading).filter_by(sensor_id=sensor_id).order_by(SensorReading.timestamp.desc()).first()
+            if reading and reading.temperature == 99.9:
                 print("✅ Redis -> SQLite Flow: OK")
             else:
                 print("❌ SQLite data missing or mismatch.")
@@ -100,10 +89,17 @@ def run_verification(app_instance, safe_mode=True):
         print(f"❌ Verification Error: {e}")
         return False
     finally:
+        # Cleanup Test Sensor
+        if sensor_id and safe_mode:
+            try:
+                # Assuming simple logical delete or hard delete allowed via code
+                # We can use DELETE endpoint
+                client.delete(f'/api/sensors/{sensor_id}')
+                print("   🧹 Test Sensor Cleaned up.")
+            except:
+                pass
         session.close()
 
 if __name__ == "__main__":
     from manage import app
-    # When run directly, we might want full unsafe check? Or default to safe?
-    # Let's do unsafe for manual verification script usage
     run_verification(app, safe_mode=False)
