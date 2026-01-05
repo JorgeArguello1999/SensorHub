@@ -294,9 +294,16 @@ const setupEventListeners = () => {
   if (modeAnalyticsBtn) {
       modeAnalyticsBtn.addEventListener("click", () => {
           chartMode = 'analytics';
-          // ... UI Toggle ...
-          // Just a placeholder to avoid undefined errors if user clicks
-          alert("Analytics not available for dynamic sensors yet.");
+          
+          modeAnalyticsBtn.className = "mode-tab-analytics px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-indigo-500/20";
+          modeRealtimeBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+          modeHistoryBtn.className = "mode-tab-inactive px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2";
+
+          document.getElementById("history-controls").classList.remove("hidden");
+          chartContainer.classList.add("hidden");
+          analyticsPanel.classList.remove("hidden");
+
+          loadHistoryData();
       });
   }
 
