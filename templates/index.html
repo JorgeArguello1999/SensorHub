@@ -524,10 +524,40 @@
             </div>
 
             <div class="mt-6 glass-panel rounded-2xl p-6">
-                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <i data-lucide="table-2" class="w-5 h-5 text-cyan-400"></i> Data Log
-                </h3>
-                <div class="overflow-x-auto custom-scroll max-h-[300px]">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <i data-lucide="table-2" class="w-5 h-5 text-cyan-400"></i> Data Log
+                    </h3>
+
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <!-- Sensor Filter -->
+                        <div class="relative">
+                            <select id="log-filter-sensor"
+                                class="bg-slate-900 border border-slate-700 text-xs text-white rounded-lg pl-3 pr-8 py-2 appearance-none focus:border-cyan-500 outline-none cursor-pointer">
+                                <option value="all">All Sensors</option>
+                                <!-- Populated JS -->
+                            </select>
+                            <i data-lucide="chevron-down"
+                                class="w-3 h-3 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+                        </div>
+
+                        <!-- Sort Order -->
+                        <div class="relative">
+                            <select id="log-sort-order"
+                                class="bg-slate-900 border border-slate-700 text-xs text-white rounded-lg pl-3 pr-8 py-2 appearance-none focus:border-cyan-500 outline-none cursor-pointer">
+                                <option value="newest">Newest First (Live)</option>
+                                <option value="temp_desc">Highest Temp</option>
+                                <option value="temp_asc">Lowest Temp</option>
+                                <option value="hum_desc">Highest Hum</option>
+                                <option value="hum_asc">Lowest Hum</option>
+                            </select>
+                            <i data-lucide="arrow-up-down"
+                                class="w-3 h-3 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scroll max-h-[400px]">
                     <table class="w-full text-left border-collapse">
                         <thead class="sticky top-0 bg-slate-900/90 backdrop-blur-sm z-10">
                             <tr
@@ -536,6 +566,7 @@
                                 <th class="p-3 text-cyan-400 text-right">Temp</th>
                                 <th class="p-3 text-amber-400 text-right">Hum</th>
                                 <th class="p-3 text-right">Time</th>
+                                <th class="p-3 text-center w-16">Source</th>
                             </tr>
                         </thead>
                         <tbody class="text-sm text-slate-300 font-mono" id="data-table-body">

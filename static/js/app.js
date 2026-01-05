@@ -57,13 +57,15 @@ import {
   renderStaticChart, 
   switchTab,
   getVisibleChartData,
-  renderAnalytics
+  renderAnalytics,
+  renderDataLogTable 
 } from "./ui.js";
 
 // LOCAL STATE
 let activeTab = "temperatura";
 let chartMode = "realtime"; 
 let cachedHistoryData = []; 
+let currentLogFilter = { sensorId: 'all', sort: 'newest' }; 
 
 // API CALLS
 const fetchSensors = async () => {
@@ -80,6 +82,7 @@ const fetchSensors = async () => {
         
         renderDynamicDashboard(globalSensors);
         renderConfigSensors(globalSensors); // Update config list if open
+        populateLogFilterSensors();
         initComparisonChart(activeTab, globalSensors);
         
         // Init sensorDataMap
@@ -145,13 +148,32 @@ const updatePredictions = async () => {
 };
 
 // SSE STREAM
+
+// Populate Sensor Filter Dropdown
+const populateLogFilterSensors = () => {
+    const select = document.getElementById('log-filter-sensor');
+    if(!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="all">All Sensors</option>';
+    globalSensors.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.text = s.name;
+        select.appendChild(opt);
+    });
+    // Restore selection if still valid
+    if(current && (current === 'all' || globalSensors.find(s=>s.id == current))) {
+        select.value = current;
+    }
+};
+
+// SSE STREAM
+
 const setupStreamListener = () => {
   const eventSource = new EventSource("/stream-data");
   eventSource.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      // msg structure: { sensor_id: 1, data: {temperature: 22, humidity: 50}, server_time: "..." }
-      
       const timeString = msg.server_time || new Date().toLocaleTimeString("en-US");
 
       if (lastUpdateSpan) {
@@ -173,19 +195,23 @@ const setupStreamListener = () => {
           if(tEl) tEl.innerText = !isNaN(tempVal) ? `${tempVal.toFixed(1)}°` : "--°";
           if(hEl) hEl.innerText = !isNaN(humVal) ? `H: ${humVal.toFixed(1)}%` : "H: --%";
           
-          // Note: Chart update is now decoupled or we can call it here if we want instant gratification
-          // But for multiple sensors, better to tick periodically or just call it here once.
-          // Since we changed updateChartRealTime to iterate all datasets, calling it here is fine.
-          // Note: Chart update is now decoupled to Interval
-          // if (chartMode === 'realtime') {
-          //    updateChartRealTime(activeTab, sensorDataMap);
-          // }
+          // Filter Check & Log Update
+          if(currentLogFilter.sensorId === 'all' || currentLogFilter.sensorId == sId) {
+             const newData = {
+                 ...msg.data,
+                 timestamp: timeString, 
+                 source: 'live'
+             };
+             cachedHistoryData.push(newData);
+             renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
+          }
       }
 
     } catch (e) { console.error("SSE Error", e); }
   };
 };
 
+// CENTRALIZED DATA LOADER
 // CENTRALIZED DATA LOADER
 const loadHistoryData = async () => {
     const hours = parseInt(historyHoursInput.value) || 12; 
@@ -194,50 +220,46 @@ const loadHistoryData = async () => {
     if(chartMode === 'analytics') document.getElementById("stat-total-samples").innerText = "...";
 
     try {
-        const data = await fetchHourlyHistory(hours);
-        cachedHistoryData = data; 
+        const data = await fetchHourlyHistory(hours, currentLogFilter.sensorId);
+        // Mark as DB source
+        cachedHistoryData = data.map(d => ({ ...d, source: 'db' })); 
 
         if (chartMode === 'analytics') {
-            renderAnalytics(data, activeTab, globalSensors);
+            renderAnalytics(cachedHistoryData, activeTab, globalSensors);
+            renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
         } else if (chartMode === 'history') {
-            renderStaticChart(data, activeTab, globalSensors);
-            fillHistoryTable(data, globalSensors);
+            renderStaticChart(cachedHistoryData, activeTab, globalSensors);
+            renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
+        } else {
+            // Realtime mode
+            renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
         }
     } catch (e) { console.error(e); }
 
     if(chartMode === 'history') document.getElementById("comparison-chart").style.opacity = "1";
 };
 
-const fillHistoryTable = (data, sensors) => {
-    const tableBody = document.getElementById('data-table-body');
-    if (tableBody && data.length > 0) {
-        tableBody.innerHTML = ""; 
-        // Show recent 20 readings
-        data.slice(0, 20).forEach(row => { 
-             let color = "text-slate-400";
-             const sensor = sensors.find(s => s.id === row.sensor_id);
-             if(sensor) {
-                 if(sensor.type === 'openweather') color = "text-amber-400";
-                 else if(sensor.name.toLowerCase().includes('bed')) color = "text-cyan-400";
-                 else color = "text-emerald-400";
-             }
 
-             const tr = `
-                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td class="p-3 ${color} font-bold">${row.sensor_name || 'Unknown'}</td>
-                    <td class="p-3 text-right font-mono text-slate-300">${row.temperature !== null ? row.temperature.toFixed(1)+'°' : '--'}</td>
-                    <td class="p-3 text-right font-mono text-slate-300">${row.humidity !== null ? row.humidity.toFixed(0)+'%' : '--'}</td>
-                    <td class="p-3 text-right text-slate-500 font-mono text-xs">${row.timestamp.split(' ')[1]}</td>
-                </tr>`;
-             tableBody.insertAdjacentHTML('beforeend', tr);
-        });
-    } else if (tableBody) {
-        tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic text-center" colspan="4">No data found</td></tr>`;
-    }
-};
 
 // EVENTS
 const setupEventListeners = () => {
+
+    // DATA LOG FILTERS
+    const filterSensor = document.getElementById('log-filter-sensor');
+    const sortOrder = document.getElementById('log-sort-order');
+    
+    if(filterSensor) {
+        filterSensor.addEventListener('change', (e) => {
+            currentLogFilter.sensorId = e.target.value;
+            loadHistoryData();
+        });
+    }
+    if(sortOrder) {
+        sortOrder.addEventListener('change', (e) => {
+            currentLogFilter.sort = e.target.value;
+            renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
+        });
+    }
 
   // TABS
   tabButtons.forEach((button) => {
@@ -249,10 +271,12 @@ const setupEventListeners = () => {
         if(chartMode === 'history' || chartMode === 'analytics'){
              // Re-render with existing cache if valid
              if (cachedHistoryData.length > 0) {
-                 if (chartMode === 'analytics') renderAnalytics(cachedHistoryData, activeTab, globalSensors);
-                 else {
+                 if (chartMode === 'analytics') {
+                    renderAnalytics(cachedHistoryData, activeTab, globalSensors);
+                    renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
+                 } else {
                      renderStaticChart(cachedHistoryData, activeTab, globalSensors);
-                     fillHistoryTable(cachedHistoryData, globalSensors);
+                     renderDataLogTable(cachedHistoryData, globalSensors, currentLogFilter.sort);
                  }
              } else {
                  loadHistoryData();

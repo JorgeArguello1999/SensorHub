@@ -536,3 +536,81 @@ export const renderSensorList = () => {
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
 };
+
+/**
+ * DATA LOG RENDERER
+ */
+export const renderDataLogTable = (data, globalSensors, sortOrder = 'newest') => {
+    const tableBody = document.getElementById('data-table-body');
+    if (!tableBody) return;
+    
+    // 1. Sort Data (Clone to avoid mutating cache logic if needed)
+    let sortedData = [...data];
+    
+    const getVal = (d, key) => {
+        // Handle different key names if API vs RT
+        // We ensure data structure consistency in app.js before calling this
+        return d[key] !== undefined && d[key] !== null ? parseFloat(d[key]) : -999;
+    };
+
+    switch(sortOrder) {
+        case 'newest':
+            // Time Descending (Newest First)
+            sortedData.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+            break;
+        case 'temp_desc':
+            sortedData.sort((a,b) => getVal(b, 'temperature') - getVal(a, 'temperature'));
+            break;
+        case 'temp_asc':
+            sortedData.sort((a,b) => getVal(a, 'temperature') - getVal(b, 'temperature'));
+            break;
+        case 'hum_desc':
+            sortedData.sort((a,b) => getVal(b, 'humidity') - getVal(a, 'humidity'));
+            break;
+        case 'hum_asc':
+            sortedData.sort((a,b) => getVal(a, 'humidity') - getVal(b, 'humidity'));
+            break;
+    }
+
+    // 2. Render Limit (e.g. 100 rows for scrolling)
+    const displayData = sortedData.slice(0, 100);
+
+    if (displayData.length === 0) {
+        tableBody.innerHTML = `<tr><td class="p-3 text-slate-500 italic text-center" colspan="5">No data matching filter</td></tr>`;
+        return;
+    }
+
+    tableBody.innerHTML = displayData.map(row => {
+        let color = "text-slate-400";
+        // Resolve Sensor Name/Color
+        let sensorName = row.sensor_name || 'Unknown';
+        // If row doesn't have name (e.g. legacy), try to find in globalSensors
+        const sensor = globalSensors.find(s => s.id === row.sensor_id);
+        if(sensor) {
+            sensorName = sensor.name;
+            if(sensor.type === 'openweather') color = "text-amber-400";
+            else if(sensor.name.toLowerCase().includes('bed')) color = "text-cyan-400";
+            else color = "text-emerald-400";
+        }
+        
+        const isLive = row.source === 'live';
+        const sourceBadge = isLive 
+            ? `<span class="bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded font-bold border border-cyan-500/30">LIVE</span>`
+            : `<span class="bg-slate-700 text-slate-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-white/10">DB</span>`;
+
+        // Format values
+        const tVal = row.temperature !== null ? parseFloat(row.temperature).toFixed(1) + '°' : '--';
+        const hVal = row.humidity !== null ? parseFloat(row.humidity).toFixed(0) + '%' : '--';
+        const tStr = row.timestamp.includes("T") ? row.timestamp.split("T")[1].substring(0,8) : (row.timestamp.split(" ").length > 1 ? row.timestamp.split(" ")[1] : row.timestamp);
+
+        return `
+            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors ${isLive ? 'bg-cyan-900/10' : ''}">
+                <td class="p-3 ${color} font-bold">${sensorName}</td>
+                <td class="p-3 text-right font-mono text-slate-300">${tVal}</td>
+                <td class="p-3 text-right font-mono text-slate-300">${hVal}</td>
+                <td class="p-3 text-right text-slate-500 font-mono text-xs">${tStr}</td>
+                <td class="p-3 text-center">${sourceBadge}</td>
+            </tr>
+        `;
+    }).join("");
+};
