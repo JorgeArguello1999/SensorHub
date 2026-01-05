@@ -27,8 +27,9 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
 ### 🤖 AI & Predictions
 - **Prediction Engine:** Client-side Linear Regression implementation to forecast short-term temperature trends (Morning, Afternoon, Night).
 
-### ⚙️ Sensor Management
-- **Management Interface:** Dynamic UI to add, edit, or remove sensors on the fly.
+### ⚙️ Configuration & Management
+- **Sensor Management:** Dynamic UI to add, edit, or remove sensors on the fly.
+- **System Settings:** Configurable data save interval (DB persistence frequency) directly from the UI.
 - **Authentication:** Modern Sign In / Sign Up interface for secure access.
 
 ## 🛠️ Tech Stack
