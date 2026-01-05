@@ -175,6 +175,10 @@
                     <button id="btn-add-sensor-view"
                         class="text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-400 text-sm font-bold transition-colors">Add
                         New Sensor</button>
+                    <div class="h-px bg-white/5 my-2"></div>
+                    <button id="btn-system-settings"
+                        class="text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-400 text-sm font-bold transition-colors">System
+                        Settings</button>
                 </div>
 
                 <!-- Content -->
@@ -184,6 +188,30 @@
                         <div id="config-sensor-list" class="grid grid-cols-1 gap-4">
                             <!-- Populated by JS -->
                         </div>
+                    </div>
+
+                    <!-- System Settings View -->
+                    <div id="config-view-system" class="hidden max-w-lg mx-auto">
+                        <h3 class="text-lg font-bold text-white mb-6">System Configuration</h3>
+                        <form id="system-config-form" class="space-y-6">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Data Save Interval
+                                    (Minutes)</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="sys-save-interval" min="1" max="1440" required
+                                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-cyan-500"
+                                        placeholder="15">
+                                    <span class="text-slate-500 text-sm">min</span>
+                                </div>
+                                <p class="text-[10px] text-slate-500 mt-1">How often sensor history is saved to the
+                                    SQLite database.</p>
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded-lg transition-all shadow-lg shadow-cyan-500/20">
+                                Save Settings
+                            </button>
+                        </form>
                     </div>
 
                     <!-- Add View -->

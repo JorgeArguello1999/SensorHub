@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
 from models.db import redis_client, SessionLocal
-from models.sql_models import SensorReading, Sensor
+from models.sql_models import SensorReading, Sensor, SystemConfig
 from sqlalchemy import desc
 from os import getenv
 import json
@@ -24,6 +24,45 @@ def check_auth():
     if not data or data.get('password') != ADMIN_PASSWORD:
         return jsonify({"success": False, "error": "Invalid Password"}), 401
     return jsonify({"success": True}), 200
+
+# --- SYSTEM CONFIG ---
+@api_routes.route('/config/system', methods=['GET'])
+def get_system_config():
+    session = get_db()
+    try:
+        configs = session.query(SystemConfig).all()
+        # Convert to key-value dict for easier frontend consumption
+        result = {c.key: c.value for c in configs}
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
+
+@api_routes.route('/config/system', methods=['POST'])
+def update_system_config():
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    session = get_db()
+    try:
+        for key, value in data.items():
+            config = session.query(SystemConfig).filter_by(key=key).first()
+            if config:
+                config.value = str(value)
+                config.updated_at = datetime.now()
+            else:
+                config = SystemConfig(key=key, value=str(value))
+                session.add(config)
+        
+        session.commit()
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        session.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        session.close()
 
 # --- SENSORS CRUD ---
 @api_routes.route('/sensors', methods=['GET'])

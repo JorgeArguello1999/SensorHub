@@ -49,3 +49,17 @@ class SensorReading(Base):
             "sensor_id": self.sensor_id,
             "sensor_name": self.sensor.name if self.sensor else "Unknown"
         }
+
+class SystemConfig(Base):
+    __tablename__ = 'system_config'
+
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now)
+
+    def to_dict(self):
+        return {
+            "key": self.key,
+            "value": self.value,
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+        }

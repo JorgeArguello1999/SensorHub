@@ -4,7 +4,7 @@ import threading
 from datetime import datetime
 import pytz
 from models.db import redis_client, SessionLocal
-from models.sql_models import SensorReading
+from models.sql_models import SensorReading, SystemConfig
 
 # --- CONFIG ---
 TIMEZONE_QUITO = pytz.timezone('America/Guayaquil')
@@ -60,9 +60,21 @@ def _worker_loop():
     while True:
         time.sleep(10) # Check every 10 seconds
         
+        # Dynamic Interval Fetch
+        interval_minutes = 15 # Default
+        try:
+             # Create a new session just to check config to avoid stale state in long-running threads
+             session = SessionLocal()
+             config = session.query(SystemConfig).filter_by(key='save_interval_minutes').first()
+             if config:
+                 interval_minutes = int(config.value)
+             session.close()
+        except Exception as e:
+            print(f"⚠️ Error reading config: {e}")
+
         ahora = time.time()
-        if (ahora - last_save_time) > (SAVE_INTERVAL_MINUTES * 60):
-             print("⏱️ Intervalo cumplido. Guardando historial...")
+        if (ahora - last_save_time) > (interval_minutes * 60):
+             print(f"⏱️ Intervalo de {interval_minutes}m cumplido. Guardando historial...")
              guardar_historial()
              last_save_time = ahora
 

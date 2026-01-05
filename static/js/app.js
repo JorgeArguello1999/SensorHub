@@ -43,7 +43,12 @@ import {
   rangeSearchBtn,
   chartMode as initialChartMode,
   chartContainer,
-  analyticsPanel
+  analyticsPanel,
+  // System Settings Refs
+  btnSystemSettings,
+  configViewSystem,
+  systemConfigForm,
+  sysSaveIntervalInput
 } from "./config.js";
 
 import { fetchHourlyHistory, fetchRangeHistory } from "./api.js";
@@ -372,14 +377,52 @@ const setupEventListeners = () => {
   const showList = () => {
       configViewList.classList.remove('hidden');
       configViewAdd.classList.add('hidden');
+      configViewSystem.classList.add('hidden');
   };
   const showAdd = () => {
       configViewList.classList.add('hidden');
       configViewAdd.classList.remove('hidden');
+      configViewSystem.classList.add('hidden');
+  };
+  const showSystem = async () => {
+      configViewList.classList.add('hidden');
+      configViewAdd.classList.add('hidden');
+      configViewSystem.classList.remove('hidden');
+      
+      // Load current settings
+      try {
+          const res = await fetch('/api/config/system');
+          const data = await res.json();
+          if(data.save_interval_minutes) {
+              sysSaveIntervalInput.value = data.save_interval_minutes;
+          }
+      } catch(e) { console.error("Error loading config:", e); }
   };
 
   if(btnViewSensors) btnViewSensors.addEventListener('click', showList);
   if(btnAddSensorView) btnAddSensorView.addEventListener('click', showAdd);
+  if(btnSystemSettings) btnSystemSettings.addEventListener('click', showSystem);
+
+  // System Config Submit
+  if(systemConfigForm) {
+      systemConfigForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const val = sysSaveIntervalInput.value;
+          try {
+              const res = await fetch('/api/config/system', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ save_interval_minutes: val })
+              });
+              const data = await res.json();
+              if(data.success) {
+                  alert("Settings Saved!");
+              } else {
+                  alert("Error saving settings: " + (data.error || 'Unknown'));
+              }
+          } catch(e) { console.error(e); }
+      });
+  }
 
   // Add Sensor Type Select
   if(typeSelectEsp32) {

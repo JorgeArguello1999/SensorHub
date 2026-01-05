@@ -96,6 +96,12 @@ export let configViewList = null;
 export let configViewAdd = null;
 export let configSensorList = null;
 
+// System Settings Refs
+export let btnSystemSettings = null;
+export let configViewSystem = null;
+export let systemConfigForm = null;
+export let sysSaveIntervalInput = null;
+
 export let typeSelectEsp32 = null;
 export let typeSelectWeather = null;
 export let addSensorForm = null;
@@ -165,6 +171,12 @@ export const initDOMRefs = () => {
   configViewList = document.getElementById("config-view-list");
   configViewAdd = document.getElementById("config-view-add");
   configSensorList = document.getElementById("config-sensor-list");
+
+  // System Settings Refs
+  btnSystemSettings = document.getElementById("btn-system-settings");
+  configViewSystem = document.getElementById("config-view-system");
+  systemConfigForm = document.getElementById("system-config-form");
+  sysSaveIntervalInput = document.getElementById("sys-save-interval");
   
   // -- ADD SENSOR FORM --
   typeSelectEsp32 = document.getElementById("type-select-esp32");
