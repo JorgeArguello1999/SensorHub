@@ -137,10 +137,25 @@ The Dashboard features a client-side AI module that uses **Linear Regression** t
   <img src="static/images/screenshot_4.png" width="45%" alt="History View">
 </p>
 <p align="center">
-  <img src="static/images/screenshot_5.png" width="30%" alt="Mobile View 1">
-  <img src="static/images/screenshot_6.png" width="30%" alt="Mobile View 2">
-  <img src="static/images/screenshot_7.png" width="30%" alt="Dark Mode">
+  <img src="static/images/screenshot_5.png" width="30%" alt="Admin Access">
+  <img src="static/images/screenshot_6.png" width="30%" alt="List of Sensors">
 </p>
+<p align="center">
+  <img src="static/images/screenshot_7.png" width="30%" alt="Sensor Configuration">
+  <img src="static/images/screenshot_8.png" width="30%" alt="Database Settings">
+</p>
+
+## 🔌 ESP32 Firmware Setup
+To connect a physical ESP32 sensor:
+1. Go to the **Web Dashboard** -> **Config** (Admin) -> **Add Sensor**.
+2. Select **ESP32 Device**, give it a name, and copy the **Device Token**.
+3. Download the firmware using the **"Download .ino Sketch"** button in the modal.
+4. Open the file in **Arduino IDE** and update:
+   - `ssid`: Your WiFi Name.
+   - `password`: Your WiFi Password.
+   - `serverBaseUrl`: Your Server URL (e.g. `http://192.168.1.10:5000`).
+   - `deviceToken`: The token you copied.
+5. Flash the ESP32. It will start sending data every 10 seconds.
 
 ## ⚠️ Known Issues
 - **AI Predictions (Beta):** The Linear Regression module currently requires a stable stream of data (minimum 2 points) to generate forecasts. In some environments with intermittent sensor availability, the predictions may display as "Calculating..." or "Low Data". This is under investigation.

@@ -1,139 +1,122 @@
-#define ENABLE_USER_AUTH
-#define ENABLE_DATABASE
-
-#include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <FirebaseClient.h>
+#include <HTTPClient.h>
 #include <DHT.h>
+#include <ArduinoJson.h> // Make sure to install ArduinoJson library via Library Manager
 
-// --------------------------------------------------
-// SENSOR CONFIGURATION
-// --------------------------------------------------
-#define DHTPIN_CUARTO 14
-#define DHTPIN_SALA 27
-#define DHTTYPE DHT22
+// ---------------------------------------------------------------------------
+// 1. CONFIGURATION
+// ---------------------------------------------------------------------------
 
-DHT sensorCuarto(DHTPIN_CUARTO, DHTTYPE);
-DHT sensorSala(DHTPIN_SALA, DHTTYPE);
+// WiFi Credentials
+const char* ssid     = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
 
-// --------------------------------------------------
-// WiFi CONFIG
-// --------------------------------------------------
-const char* ssid = "";
-const char* password = "";
+// Server Configuration
+// IMPORTANT: Use your computer's local IP address if running locally (e.g., http://192.168.1.15:5000)
+// If deployed, use your domain (e.g., https://my-sensor-app.com)
+const char* serverBaseUrl = "http://YOUR_SERVER_IP:5000"; 
 
-// --------------------------------------------------
-// FIREBASE CONFIG
-// --------------------------------------------------
-#define API_KEY       ""
-#define DATABASE_URL  ""
-#define USER_EMAIL    ""
-#define USER_PASS     ""
+// Update Interval (Milliseconds)
+const unsigned long interval = 10000; // 10 seconds
 
-UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASS);
+// Sensor Configuration
+#define DHTPIN 4     // Digital Pin connected to DHT Sensor
+#define DHTTYPE DHT22   // DHT 11 or DHT 22
 
-FirebaseApp app;
-WiFiClientSecure ssl_client;
-using AsyncClient = AsyncClientClass;
-AsyncClient aClient(ssl_client);
-RealtimeDatabase db;
+// ---------------------------------------------------------------------------
+// 2. GLOBAL OBJECTS
+// ---------------------------------------------------------------------------
 
-void processData(AsyncResult &aResult);
+DHT dht(DHTPIN, DHTTYPE);
+unsigned long lastSendTime = 0;
 
-// Send to Firebase every 10 seconds
-unsigned long lastSend = 0;
-const unsigned long interval = 10000;
+// SENSOR TOKEN (Get this from the Web Panel -> Config -> Add Sensor)
+// You can hardcode it here or manage multiple devices
+String deviceToken = "PASTE_YOUR_TOKEN_HERE"; 
 
-// --------------------------------------------------
-// FUNCTION: Read sensor
-// --------------------------------------------------
-bool leerSensor(DHT& sensor, float& h, float& t) {
-  h = sensor.readHumidity();
-  t = sensor.readTemperature();
-
-  if (isnan(h) || isnan(t)) return false;
-  return true;
-}
-
-// --------------------------------------------------
-// SETUP
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
+// 3. SETUP
+// ---------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
+  dht.begin();
 
-  sensorCuarto.begin();
-  sensorSala.begin();
-
-  Serial.println("Conectando a WiFi...");
+  // Connect to WiFi
+  Serial.println();
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+  
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
     delay(500);
+    Serial.print(".");
   }
 
-  Serial.println("\nWiFi conectado!");
-  Serial.print("IP: ");
+  Serial.println("\nWiFi Connected!");
+  Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
-
-  // Initialize Firebase
-  ssl_client.setInsecure();  
-  initializeApp(aClient, app, getAuth(user_auth), processData, "authTask");
-  app.getApp<RealtimeDatabase>(db);
-  db.url(DATABASE_URL);
-
-  Serial.println("Firebase listo.");
 }
 
-// --------------------------------------------------
-// LOOP
-// --------------------------------------------------
+// ---------------------------------------------------------------------------
+// 4. MAIN LOOP
+// ---------------------------------------------------------------------------
 void loop() {
-  app.loop();
-
-  if (!app.ready()) return;
-
-  unsigned long now = millis();
-  if (now - lastSend < interval) return;
-  lastSend = now;
-
-  float hDorm, tDorm, hSala, tSala;
-
-  // Read sensors
-  bool okDorm = leerSensor(sensorCuarto, hDorm, tDorm);
-  delay(150);
-  bool okSala = leerSensor(sensorSala, hSala, tSala);
-
-  // Upload to Firebase
-  if (okDorm) {
-    db.set<float>(aClient, "/cuarto/temperatura", tDorm, processData, "TDorm");
-    db.set<float>(aClient, "/cuarto/humedad", hDorm, processData, "HDorm");
-
-    Serial.printf("C -> T: %.2f°C | H: %.2f%%\n", tDorm, hDorm);
-  } else {
-    Serial.println("ERROR leyendo sensor Cuarto");
+  // Check Wifi Status
+  if(WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi Disconnected. Reconnecting...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    delay(5000);
+    return;
   }
 
-  if (okSala) {
-    db.set<float>(aClient, "/sala/temperatura", tSala, processData, "TSala");
-    db.set<float>(aClient, "/sala/humedad", hSala, processData, "HSala");
+  unsigned long currentMillis = millis();
 
-    Serial.printf("Sala -> T: %.2f°C | H: %.2f%%\n", tSala, hSala);
-  } else {
-    Serial.println("ERROR leyendo sensor SALA");
+  if (currentMillis - lastSendTime >= interval) {
+    lastSendTime = currentMillis;
+
+    // 1. Read Sensor
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    // Check if read failed
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Failed to read from DHT sensor!");
+      return;
+    }
+
+    Serial.printf("Temp: %.1fC, Hum: %.1f%%\n", t, h);
+
+    // 2. Prepare JSON Payload
+    // Uses ArduinoJson (StaticJsonDocument for small payload)
+    StaticJsonDocument<200> doc;
+    doc["temperature"] = t;
+    doc["humidity"] = h;
+    
+    String jsonOutput;
+    serializeJson(doc, jsonOutput);
+
+    // 3. Send HTTP POST
+    HTTPClient http;
+    String url = String(serverBaseUrl) + "/api/ingest/" + deviceToken;
+    
+    Serial.print("Sending data to: ");
+    Serial.println(url);
+
+    http.begin(url);
+    http.addHeader("Content-Type", "application/json");
+
+    int httpResponseCode = http.POST(jsonOutput);
+
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.printf("HTTP Response code: %d\n", httpResponseCode);
+      Serial.println(response);
+    } else {
+      Serial.printf("Error code: %d\n", httpResponseCode);
+    }
+
+    http.end();
   }
-}
-
-// --------------------------------------------------
-// FIREBASE DEBUG
-// --------------------------------------------------
-void processData(AsyncResult &aResult) {
-  if (!aResult.isResult()) return;
-
-  if (aResult.isEvent())
-    Serial.printf("Event: %s -> %s\n", aResult.uid().c_str(), aResult.eventLog().message().c_str());
-
-  if (aResult.isError())
-    Serial.printf("Firebase Error: %s\n", aResult.error().message().c_str());
 }
