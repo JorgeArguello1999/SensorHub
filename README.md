@@ -142,5 +142,8 @@ The Dashboard features a client-side AI module that uses **Linear Regression** t
   <img src="static/images/screenshot_7.png" width="30%" alt="Dark Mode">
 </p>
 
+## ⚠️ Known Issues
+- **AI Predictions (Beta):** The Linear Regression module currently requires a stable stream of data (minimum 2 points) to generate forecasts. In some environments with intermittent sensor availability, the predictions may display as "Calculating..." or "Low Data". This is under investigation.
+
 ---
 Built with ❤️ by JorgeArguello

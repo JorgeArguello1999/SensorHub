@@ -108,36 +108,91 @@ const updatePredictions = async () => {
     const hoursForTrend = 12;
     let data = [];
     try { data = await fetchHourlyHistory(hoursForTrend); } catch (e) { console.error(e); return; }
-    if (!data || data.length < 2) return;
+    
+    if (!data || data.length < 10) return; // Need some data points
 
-    const modelSala = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.sala_temp) })));
-    const modelCuarto = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.cuarto_temp) })));
-    const modelLocal = createLinearRegressionModel(data.map(d => ({ timestamp: d.timestamp, val: parseFloat(d.local_temp) })));
+    // 1. Identify Sensors from Global State
+    // Use the first 3 active sensors available in the system
+    const sensorsToPredict = globalSensors.slice(0, 3);
+    
+    if(sensorsToPredict.length === 0) return;
 
-    if(!modelSala) return;
+    // Helper: UI Render for status
+    const updateStatus = (msg) => {
+        ['pred-morning', 'pred-afternoon', 'pred-night'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.innerHTML = `<span class="text-xs text-slate-500 italic">${msg}</span>`;
+        });
+    };
+
+    if (!data || data.length < 2) {
+        updateStatus("Gathering Data...");
+        return; 
+    }
+
+    // 2. Helper to filter data for a sensor
+    const getSensorReadings = (sId) => 
+        data.filter(d => d.sensor_id === sId)
+            .map(d => ({ timestamp: d.timestamp, val: parseFloat(d.temperature) }))
+            .filter(d => !isNaN(d.val));
+
+    // 3. Create Models
+    const models = sensorsToPredict.map(s => {
+        const readings = getSensorReadings(s.id);
+        if(readings.length < 2) {
+            return { sensor: s, model: null }; // Not enough data for this specific sensor
+        }
+        return {
+            sensor: s,
+            model: createLinearRegressionModel(readings)
+        };
+    });
 
     const now = new Date();
-    const morning = new Date(now); morning.setHours(9, 0, 0);
-    const afternoon = new Date(now); afternoon.setHours(14, 0, 0);
-    const night = new Date(now); night.setHours(20, 0, 0);
-
-    const render = (id, time) => {
-        const el = document.getElementById(id);
+    // Reset date objects for each render to ensure correctness
+    
+    // UI Render Helper
+    const renderTimeSlot = (containerId, hour) => {
+        const d = new Date(); d.setHours(hour, 0, 0);
+        // If hour is passed, predict for tomorrow? Logic constraint: 12h trend. 
+        // Simple linear regression extends line. 
+        
+        const el = document.getElementById(containerId);
         if(!el) return;
+
+        let htmlVals = '';
+        let htmlLabels = '';
+        
+        models.forEach((m, idx) => {
+             // Fallback if model failed (insufficient sensor data)
+             let val = "--";
+             if(m.model) {
+                 val = m.model.predict(d).toFixed(1) + "°";
+             } else {
+                 val = "Low Data"; 
+             }
+
+             // Cycle colors: Emerald, Cyan, Amber
+             const colors = ["text-emerald-400", "text-cyan-400", "text-amber-400"];
+             const color = colors[idx % 3];
+             
+             htmlVals += `<span class="${color} font-bold text-[10px]" title="${m.sensor.name}">${val}</span>`;
+             htmlLabels += `<span>${m.sensor.name.substring(0,6)}</span>`;
+        });
+
         el.innerHTML = `
-            <div class="flex justify-between w-full mt-1 px-1">
-                <span class="text-emerald-400 font-bold">${modelSala.predict(time).toFixed(1)}°</span>
-                <span class="text-cyan-400 font-bold">${modelCuarto.predict(time).toFixed(1)}°</span>
-                <span class="text-amber-400 font-bold">${modelLocal.predict(time).toFixed(1)}°</span>
+            <div class="flex justify-between w-full mt-1 px-1 gap-1">
+                ${htmlVals}
             </div>
-            <div class="flex justify-between w-full text-[9px] text-slate-500 px-1 mt-0.5">
-                <span>Living</span><span>Bed</span><span>Out</span>
+            <div class="flex justify-between w-full text-[9px] text-slate-500 px-1 mt-0.5 gap-1">
+                ${htmlLabels}
             </div>
         `;
     };
-    render('pred-morning', morning);
-    render('pred-afternoon', afternoon);
-    render('pred-night', night);
+
+    renderTimeSlot('pred-morning', 9);
+    renderTimeSlot('pred-afternoon', 14);
+    renderTimeSlot('pred-night', 20);
 
     const btnCustom = document.getElementById('btn-predict-custom');
     if (btnCustom) {
@@ -146,8 +201,15 @@ const updatePredictions = async () => {
             if (!timeInput) return;
             const [h, m] = timeInput.split(':');
             const t = new Date(); t.setHours(h, m, 0);
+            
+            // Use first model avail for custom
+            let pVal = "--";
+            if(models.length > 0 && models[0].model) {
+                 pVal = models[0].model.predict(t).toFixed(1);
+            }
+            
             document.getElementById('custom-prediction-result').classList.remove('hidden');
-            document.getElementById('custom-pred-value').innerText = `${modelSala.predict(t).toFixed(1)}°C`;
+            document.getElementById('custom-pred-value').innerText = `${pVal}°C`;
         };
     }
 };

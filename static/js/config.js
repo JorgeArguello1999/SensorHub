@@ -35,10 +35,7 @@ export let globalSensors = []; // Array of sensor objects
 export let sensorDataMap = {}; // Key: sensor_id, Value: {temperature: X, humidity: Y}
 export let adminToken = null; // Store password temporarily
 
-export let userSensors = [
-    { id: 1, name: "Living Room Node", location: "sala", token: "esp32_token_sala_01", status: "active" },
-    { id: 2, name: "Bedroom Node", location: "cuarto", token: "esp32_token_cuarto_02", status: "active" }
-];
+export let userSensors = [];
 
 // ----------------------------------------------------------------------
 // DOM REFERENCES
