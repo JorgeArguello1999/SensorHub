@@ -41,5 +41,53 @@ case "$RUN_TESTS" in
     ;;
 esac
 
-echo "🚀 Starting web server..."
-exec "$@"
+# Whether to start a simulated sensor that sends continuous live data
+case "${START_SIMULATOR:-0}" in
+  1|true|TRUE|yes|YES|on|ON) START_SIMULATOR=1 ;;
+  *) START_SIMULATOR=0 ;;
+esac
+
+if [ "$START_SIMULATOR" = "1" ]; then
+  echo "📡 Ensuring a simulated sensor exists..."
+  TOKEN=$(python - <<'PY' | grep '^key_'
+import uuid
+from models.db import SessionLocal, init_db
+from models.sql_models import Sensor
+init_db()
+session = SessionLocal()
+try:
+    s = session.query(Sensor).filter_by(name="Simulated Sensor", type="esp32").first()
+    if s is None:
+        s = Sensor(name="Simulated Sensor", type="esp32", token="key_" + uuid.uuid4().hex[:12])
+        session.add(s)
+        session.commit()
+    print(s.token)
+finally:
+    session.close()
+PY
+)
+  echo "✅ Simulator sensor ready (token=${TOKEN})"
+
+  # Start the web server in the background so the simulator can talk to it
+  "$@" &
+  echo "🚀 Web server started (pid $!)."
+
+  echo "⏳ Waiting for web server to accept connections..."
+  python - <<'PY'
+import time, urllib.request
+for _ in range(30):
+    try:
+        urllib.request.urlopen("http://localhost:5000/", timeout=2)
+        break
+    except Exception:
+        time.sleep(1)
+PY
+
+  echo "📡 Starting ESP32 simulator..."
+  python test/esp32_simulator.py "$TOKEN" &
+  echo "🚀 Simulator running (pid $!). All services up. Press Ctrl+C to stop."
+  wait
+else
+  echo "🚀 Starting web server..."
+  exec "$@"
+fi
