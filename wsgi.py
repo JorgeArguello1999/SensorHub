@@ -1,7 +1,7 @@
 # wsgi.py
 from manage import app
 from services.sensor_worker import start_sensor_worker
-from models.db import _db as db_client
+from models.db import redis_client as db_client
 
 # Verify that the DB is ready before starting the worker
 if db_client is not None:
