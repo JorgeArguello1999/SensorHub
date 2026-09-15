@@ -92,7 +92,7 @@ const fetchSensors = async () => {
         
         // Init sensorDataMap
         data.forEach(s => {
-            if(!sensorDataMap[s.id]) sensorDataMap[s.id] = { temperature: 0, humidity: 0 };
+            if(!sensorDataMap[s.id]) sensorDataMap[s.id] = { temperature: null, humidity: null };
         });
 
     } catch (e) { console.error("Error fetching sensors:", e); }

@@ -86,6 +86,7 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
     | `DATABASE_URL` | SQLAlchemy connection string. | `sqlite:///sensors.db` |
     | `REDIS_HOST` | Redis server address. | `localhost` |
 
+4.  **Run the application:**
     ```bash
     uv run manage.py
     ```
@@ -101,6 +102,76 @@ Beyond displaying raw data, the system evaluates **Infrastructure Health** (Upti
     ```bash
     uv run test/esp32_simulator.py <PASTE_YOUR_TOKEN_HERE>
     ```
+
+## 🐳 Docker Deployment
+
+Deploy the entire stack (app + Redis) with a single container. Ideal for production or any environment with Docker installed.
+
+### 1. Build the Docker Image
+From the project root, build the image with the latest changes:
+
+```bash
+docker build -t sensorhub:latest .
+```
+
+### 2. Run the Container
+
+The `docker-entrypoint.sh` starts the internal Redis server and then launches the Flask/Gunicorn application. Two run modes are available:
+
+#### Option A: Standard Mode (Dashboard ready to receive data)
+Persist your database by mounting `sensors.db` to the host:
+
+```bash
+docker run -d --name sensorhub \
+  -p 5000:5000 \
+  -v $(pwd)/sensors.db:/app/sensors.db \
+  -e ADMIN_PASSWORD=admin123 \
+  sensorhub:latest
+```
+
+> **Note:** If you have a `.env` file, you can use `--env-file` instead of individual `-e` flags:
+> ```bash
+> docker run -d --name sensorhub -p 5000:5000 -v $(pwd)/sensors.db:/app/sensors.db --env-file .env sensorhub:latest
+> ```
+
+#### Option B: Simulator Mode (Recommended for testing/demo)
+If no physical devices are connected and you want to see live metrics and charts immediately, enable the built-in ESP32 simulator with `START_SIMULATOR=1`:
+
+```bash
+docker run -d --name sensorhub \
+  -p 5000:5000 \
+  -v $(pwd)/sensors.db:/app/sensors.db \
+  -e ADMIN_PASSWORD=admin123 \
+  -e START_SIMULATOR=1 \
+  sensorhub:latest
+```
+
+### 3. Access the System
+- **Web Dashboard:** Open [http://localhost:5000](http://localhost:5000) in your browser.
+- **Admin Access:** Default password is `admin123` (or the value you set in `ADMIN_PASSWORD`).
+
+### 4. Useful Management Commands
+
+- **View real-time logs:**
+  ```bash
+  docker logs -f sensorhub
+  ```
+- **Stop the container:**
+  ```bash
+  docker stop sensorhub
+  ```
+- **Restart a stopped container:**
+  ```bash
+  docker start sensorhub
+  ```
+- **Remove the container:**
+  ```bash
+  docker rm -f sensorhub
+  ```
+- **Run internal verification tests:**
+  ```bash
+  docker run --rm -e RUN_TESTS=1 sensorhub:latest
+  ```
 
 ## ⚙️ Configuration & Management 
 

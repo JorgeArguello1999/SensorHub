@@ -193,7 +193,9 @@ export const updateChartRealTime = (currentDataType, sensorDataMap) => {
       
       let val = null;
       if (dataObj) {
-          val = currentDataType === "temperature" ? parseFloat(dataObj.temperature) : parseFloat(dataObj.humidity);
+          const raw = currentDataType === "temperature" ? dataObj.temperature : dataObj.humidity;
+          val = parseFloat(raw);
+          if (isNaN(val)) val = null; // No data yet -> gap, not a fake 0/flat line
       }
       ds.data.push(val); // Push null if no data, or last value if you prefer hold
   });
